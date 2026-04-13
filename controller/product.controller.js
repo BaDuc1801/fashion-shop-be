@@ -90,6 +90,23 @@ const productController = {
     }
   },
 
+  // GET ONE BY SKU
+  getProductBySku: async (req, res) => {
+    try {
+      const { sku } = req.params;
+
+      const product = await productModel.findOne({ sku });
+
+      if (!product) {
+        return res.status(404).json({ message: "Not found" });
+      }
+
+      res.json(product);
+    } catch (err) {
+      res.status(500).json({ message: err.message });
+    }
+  },
+
   // UPDATE
   updateProduct: async (req, res) => {
     try {

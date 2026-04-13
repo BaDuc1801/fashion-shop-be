@@ -45,7 +45,9 @@ const userController = {
         name: body.name,
         email: body.email,
         password: hashedPassword,
-        avatar: body.avatar || "",
+        avatar:
+          body.avatar ||
+          "https://res.cloudinary.com/dzpw9bihb/image/upload/v1776063610/products/vynezdtx9rxrilgdrzas.jpg",
         isVerified: false,
         otp: {
           code: otp,
