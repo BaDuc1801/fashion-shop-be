@@ -1,0 +1,398 @@
+import bcrypt from "bcryptjs";
+import { generateOTP } from "../utils/otp.util.js";
+import userModel from "../model/user.model.js";
+import {
+  clearAuthCookies,
+  parseRefreshToken,
+  toPublicUser,
+} from "../utils/user.util.js";
+import { sendOtpEmail } from "../utils/user.util.js";
+import { generateAccessToken } from "../utils/user.util.js";
+import { issueRefreshToken } from "../utils/user.util.js";
+import { setAuthCookies } from "../utils/user.util.js";
+
+const OTP_PURPOSES = {
+  verify_register: {
+    subject: "Verify Register — OTP",
+    hint: "Enter the code below to verify your email.",
+  },
+  reset_password: {
+    subject: "Reset Password — OTP",
+    hint: "Use the code below to reset your password.",
+  },
+};
+
+const setUserOtpByPurpose = (user, purpose) => {
+  const otp = generateOTP();
+  user.otp = {
+    code: otp,
+    expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+    purpose,
+  };
+  return otp;
+};
+
+const userController = {
+  // REGISTER
+  register: async (req, res) => {
+    try {
+      const { body } = req;
+
+      const hashedPassword = await bcrypt.hash(body.password, 10);
+      const otp = generateOTP();
+
+      const user = await userModel.create({
+        name: body.name,
+        email: body.email,
+        password: hashedPassword,
+        avatar: body.avatar || "",
+        isVerified: false,
+        otp: {
+          code: otp,
+          expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+          purpose: "verify_register",
+        },
+      });
+
+      await sendOtpEmail(
+        body.email,
+        "Verify Register — OTP",
+        otp,
+        "Enter the code below to verify your email."
+      );
+
+      res.status(201).json({
+        message:
+          "Register successfully. OTP has been sent to your email — please verify.",
+        user: toPublicUser(user),
+        otpExpiresAt: user.otp?.expiresAt,
+        serverTime: new Date(),
+      });
+    } catch (err) {
+      if (err.code === 11000) {
+        return res.status(400).json({ message: "Email already exists" });
+      }
+
+      res.status(500).json({ message: err.message });
+    }
+  },
+
+  // LOGIN
+  login: async (req, res) => {
+    try {
+      const { email, password } = req.body;
+
+      const user = await userModel.findOne({ email });
+
+      if (!user) {
+        return res.status(400).json({ message: "User not found" });
+      }
+
+      const isMatch = await bcrypt.compare(password, user.password);
+
+      if (!isMatch) {
+        return res.status(400).json({ message: "Wrong password" });
+      }
+
+      const { access } = await setAuthCookies(res, user);
+
+      res.json({
+        user: toPublicUser(user),
+        token: access,
+      });
+    } catch (err) {
+      res.status(500).json({ message: err.message });
+    }
+  },
+
+  // REFRESH
+  refresh: async (req, res) => {
+    try {
+      const user = await parseRefreshToken(req.cookies.refresh_token);
+      if (!user) {
+        clearAuthCookies(res);
+        return res
+          .status(401)
+          .json({ message: "Invalid or expired refresh token" });
+      }
+
+      const access = generateAccessToken(user);
+      const refreshVal = await issueRefreshToken(user._id);
+
+      res.cookie("access_token", access, {
+        ...cookieBase(),
+        maxAge: 15 * 60 * 1000,
+      });
+      res.cookie("refresh_token", refreshVal, {
+        ...cookieBase(),
+        maxAge: REFRESH_COOKIE_MAX_AGE,
+      });
+
+      res.json({ token: access });
+    } catch (err) {
+      res.status(500).json({ message: err.message });
+    }
+  },
+
+  // GET PROFILE
+  getProfile: async (req, res) => {
+    try {
+      const user = await userModel.findById(req.user.id).select("-password");
+
+      res.json(user);
+    } catch (err) {
+      res.status(500).json({ message: err.message });
+    }
+  },
+
+  // GET USERS
+  getUsers: async (req, res) => {
+    try {
+      const { role, search, page = 1, limit = 10, sort = "newest" } = req.query;
+
+      const query = {};
+
+      if (role) {
+        query.role = role;
+      }
+
+      if (search) {
+        query.$or = [
+          { name: { $regex: search, $options: "i" } },
+          { email: { $regex: search, $options: "i" } },
+          { phone: { $regex: search, $options: "i" } },
+        ];
+      }
+
+      const skip = (Number(page) - 1) * Number(limit);
+
+      let sortOption = { createdAt: -1 }; // newest default
+
+      if (sort === "oldest") {
+        sortOption = { createdAt: 1 };
+      }
+
+      const [users, total] = await Promise.all([
+        userModel
+          .find(query)
+          .select("-password")
+          .sort(sortOption)
+          .skip(skip)
+          .limit(Number(limit)),
+
+        userModel.countDocuments(query),
+      ]);
+
+      res.json({
+        data: users,
+        total,
+        page: Number(page),
+        totalPages: Math.ceil(total / limit),
+      });
+    } catch (err) {
+      res.status(500).json({ message: err.message });
+    }
+  },
+
+  // UPDATE USER
+  updateUser: async (req, res) => {
+    try {
+      const { body } = req;
+
+      const user = await userModel
+        .findByIdAndUpdate(req.params.id, body, {
+          new: true,
+          runValidators: true,
+        })
+        .select("-password");
+
+      res.json(user);
+    } catch (err) {
+      if (err.code === 11000) {
+        return res.status(400).json({ message: "Email already exists" });
+      }
+
+      res.status(500).json({ message: err.message });
+    }
+  },
+
+  // DELETE USER
+  deleteUser: async (req, res) => {
+    try {
+      await userModel.findByIdAndDelete(req.params.id);
+      res.json({ message: "Deleted" });
+    } catch (err) {
+      res.status(500).json({ message: err.message });
+    }
+  },
+
+  // LOGOUT
+  logout: async (req, res) => {
+    try {
+      const user = await parseRefreshToken(req.cookies.refresh_token);
+      if (user) {
+        await userModel.findByIdAndUpdate(user._id, {
+          $unset: { refreshToken: 1 },
+        });
+      }
+      clearAuthCookies(res);
+      res.json({ message: "Logged out" });
+    } catch (err) {
+      clearAuthCookies(res);
+      res.status(500).json({ message: err.message });
+    }
+  },
+
+  // SEND OTP
+  sendOTP: async (req, res) => {
+    try {
+      const { email } = req.body;
+
+      const user = await userModel.findOne({ email });
+
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const otp = setUserOtpByPurpose(user, "reset_password");
+
+      await user.save();
+
+      const otpMeta = OTP_PURPOSES.reset_password;
+      await sendOtpEmail(email, otpMeta.subject, otp, otpMeta.hint);
+
+      res.json({
+        message: "OTP sent to email",
+        otpExpiresAt: user.otp?.expiresAt,
+        serverTime: new Date(),
+      });
+    } catch (err) {
+      res.status(500).json({ message: err.message });
+    }
+  },
+
+  // RESEND OTP
+  resendOTP: async (req, res) => {
+    try {
+      const { email, purpose = "verify_register" } = req.body;
+
+      if (!email) {
+        return res.status(400).json({ message: "email is required" });
+      }
+      if (!OTP_PURPOSES[purpose]) {
+        return res.status(400).json({
+          message: "purpose must be verify_register or reset_password",
+        });
+      }
+
+      const user = await userModel.findOne({ email });
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      if (purpose === "verify_register" && user.isVerified) {
+        return res.status(400).json({ message: "User already verified" });
+      }
+
+      const otp = setUserOtpByPurpose(user, purpose);
+      await user.save();
+
+      const otpMeta = OTP_PURPOSES[purpose];
+      await sendOtpEmail(email, otpMeta.subject, otp, otpMeta.hint);
+
+      res.json({
+        message: "OTP re-sent to email",
+        purpose,
+        otpExpiresAt: user.otp?.expiresAt,
+        serverTime: new Date(),
+      });
+    } catch (err) {
+      res.status(500).json({ message: err.message });
+    }
+  },
+
+  // VERIFY OTP
+  verifyOTP: async (req, res) => {
+    try {
+      const { email, otp } = req.body;
+
+      const user = await userModel.findOne({ email });
+
+      if (!user || !user.otp) {
+        return res.status(400).json({ message: "Invalid OTP" });
+      }
+
+      if (user.otp.purpose === "reset_password") {
+        return res.status(400).json({
+          message:
+            "This OTP is used for reset password. Call POST /reset-password with email, otp, newPassword.",
+        });
+      }
+
+      if (user.otp.code !== otp) {
+        return res.status(400).json({ message: "Wrong OTP" });
+      }
+
+      if (user.otp.expiresAt < new Date()) {
+        return res.status(400).json({ message: "OTP expired" });
+      }
+
+      user.isVerified = true;
+      user.otp = undefined;
+
+      await user.save();
+
+      res.json({ message: "Verified success" });
+    } catch (err) {
+      res.status(500).json({ message: err.message });
+    }
+  },
+
+  // RESET PASSWORD
+  resetPassword: async (req, res) => {
+    try {
+      const { email, otp, newPassword } = req.body;
+
+      if (!email || !otp || !newPassword) {
+        return res
+          .status(400)
+          .json({ message: "email, otp and newPassword are required" });
+      }
+
+      if (String(newPassword).length < 6) {
+        return res
+          .status(400)
+          .json({ message: "Password must be at least 6 characters" });
+      }
+
+      const user = await userModel.findOne({ email });
+
+      if (!user || !user.otp || user.otp.purpose !== "reset_password") {
+        return res.status(400).json({ message: "Invalid OTP" });
+      }
+
+      if (user.otp.code !== otp) {
+        return res.status(400).json({ message: "Wrong OTP" });
+      }
+
+      if (user.otp.expiresAt < new Date()) {
+        return res.status(400).json({ message: "OTP expired" });
+      }
+
+      user.password = await bcrypt.hash(newPassword, 10);
+      user.otp = undefined;
+      await user.save();
+
+      await userModel.findByIdAndUpdate(user._id, {
+        $unset: { refreshToken: 1 },
+      });
+      clearAuthCookies(res);
+
+      res.json({ message: "Password updated — please login again" });
+    } catch (err) {
+      res.status(500).json({ message: err.message });
+    }
+  },
+};
+
+export default userController;

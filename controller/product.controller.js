@@ -1,17 +1,4 @@
-import Product from "../model/product.model.js";
-import cloudinary from "../config/cloudinary.js";
-
-// upload buffer -> cloudinary
-const uploadToCloudinary = (buffer) => {
-  return new Promise((resolve, reject) => {
-    cloudinary.uploader
-      .upload_stream({ folder: "products" }, (err, result) => {
-        if (err) reject(err);
-        else resolve(result.secure_url);
-      })
-      .end(buffer);
-  });
-};
+import productModel from "../model/product.model.js";
 
 const productController = {
   // CREATE
@@ -19,7 +6,7 @@ const productController = {
     try {
       const { body } = req;
 
-      const product = await Product.create({
+      const product = await productModel.create({
         name: body.name,
         sku: body.sku,
         price: body.price,
@@ -43,7 +30,7 @@ const productController = {
     try {
       const {
         page = 1,
-        limit = 1,
+        limit = 10,
         minPrice,
         maxPrice,
         status,
@@ -61,18 +48,22 @@ const productController = {
       if (status) query.status = status;
 
       if (search) {
-        query.name = { $regex: search, $options: "i" };
+        query.$or = [
+          { name: { $regex: search.trim(), $options: "i" } },
+          { sku: { $regex: search.trim(), $options: "i" } },
+        ];
       }
 
       const skip = (page - 1) * limit;
 
       const [data, total] = await Promise.all([
-        Product.find(query)
+        productModel
+          .find(query)
           .sort({ createdAt: -1 })
           .skip(skip)
           .limit(Number(limit)),
 
-        Product.countDocuments(query),
+        productModel.countDocuments(query),
       ]);
 
       res.json({
@@ -89,7 +80,7 @@ const productController = {
   // GET ONE
   getProductById: async (req, res) => {
     try {
-      const product = await Product.findById(req.params.id);
+      const product = await productModel.findById(req.params.id);
 
       if (!product) return res.status(404).json({ message: "Not found" });
 
@@ -108,7 +99,7 @@ const productController = {
         ...body,
       };
 
-      const product = await Product.findByIdAndUpdate(
+      const product = await productModel.findByIdAndUpdate(
         req.params.id,
         updateData,
         {
@@ -130,7 +121,7 @@ const productController = {
   // DELETE
   deleteProduct: async (req, res) => {
     try {
-      await Product.findByIdAndDelete(req.params.id);
+      await productModel.findByIdAndDelete(req.params.id);
       res.json({ message: "Deleted" });
     } catch (err) {
       res.status(500).json({ message: err.message });

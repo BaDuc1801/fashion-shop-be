@@ -1,15 +1,6 @@
 import mongoose from "mongoose";
 import { calcStock } from "../utils/product.util.js";
-
-const ColorSchema = new mongoose.Schema({
-  name: { type: String, required: true },
-  quantity: { type: Number, default: 0 },
-});
-
-const SizeSchema = new mongoose.Schema({
-  size: { type: String, required: true },
-  colors: [ColorSchema],
-});
+import { SizeSchema } from "./schemas/product.schema.js";
 
 const ProductSchema = new mongoose.Schema(
   {
@@ -53,4 +44,6 @@ ProductSchema.pre("findOneAndUpdate", function () {
   }
 });
 
-export default mongoose.model("product", ProductSchema);
+const productModel = mongoose.model("product", ProductSchema);
+
+export default productModel;
