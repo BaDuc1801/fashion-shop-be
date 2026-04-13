@@ -32,6 +32,7 @@ const UserSchema = new mongoose.Schema(
     otp: {
       code: { type: String },
       expiresAt: { type: Date },
+      verified: { type: Boolean, default: false },
       purpose: {
         type: String,
         enum: ["verify_register", "reset_password"],

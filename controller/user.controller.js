@@ -27,6 +27,7 @@ const setUserOtpByPurpose = (user, purpose) => {
   user.otp = {
     code: otp,
     expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+    verified: false,
     purpose,
   };
   return otp;
@@ -367,13 +368,6 @@ const userController = {
         return res.status(400).json({ message: "Invalid OTP" });
       }
 
-      if (user.otp.purpose === "reset_password") {
-        return res.status(400).json({
-          message:
-            "This OTP is used for reset password. Call POST /reset-password with email, otp, newPassword.",
-        });
-      }
-
       if (user.otp.code !== otp) {
         return res.status(400).json({ message: "Wrong OTP" });
       }
@@ -382,11 +376,17 @@ const userController = {
         return res.status(400).json({ message: "OTP expired" });
       }
 
+      if (user.otp.purpose === "reset_password") {
+        user.otp.verified = true;
+        await user.save();
+        return res.json({
+          message: "OTP verified",
+        });
+      }
+
       user.isVerified = true;
       user.otp = undefined;
-
       await user.save();
-
       res.json({ message: "Verified success" });
     } catch (err) {
       res.status(500).json({ message: err.message });
@@ -396,12 +396,12 @@ const userController = {
   // RESET PASSWORD
   resetPassword: async (req, res) => {
     try {
-      const { email, otp, newPassword } = req.body;
+      const { email, newPassword } = req.body;
 
-      if (!email || !otp || !newPassword) {
+      if (!email || !newPassword) {
         return res
           .status(400)
-          .json({ message: "email, otp and newPassword are required" });
+          .json({ message: "email and newPassword are required" });
       }
 
       if (String(newPassword).length < 6) {
@@ -413,15 +413,18 @@ const userController = {
       const user = await userModel.findOne({ email });
 
       if (!user || !user.otp || user.otp.purpose !== "reset_password") {
-        return res.status(400).json({ message: "Invalid OTP" });
-      }
-
-      if (user.otp.code !== otp) {
-        return res.status(400).json({ message: "Wrong OTP" });
+        return res.status(400).json({ message: "Reset OTP not found" });
       }
 
       if (user.otp.expiresAt < new Date()) {
         return res.status(400).json({ message: "OTP expired" });
+      }
+
+      if (!user.otp.verified) {
+        return res.status(400).json({
+          message:
+            "OTP is not verified. Please verify OTP first before resetting password.",
+        });
       }
 
       user.password = await bcrypt.hash(newPassword, 10);
