@@ -20,8 +20,8 @@ const corsOptions = {
   origin: [
     "https://fashion-shop-tau-three.vercel.app",
     "https://fashion-shop-admin-topaz.vercel.app",
-    "http://localhost:4000",
-    "http://localhost:4001",
+    "http://localhost:4200",
+    "http://localhost:4201",
   ],
   methods: ["GET", "POST", "PUT", "DELETE"],
   credentials: true,
