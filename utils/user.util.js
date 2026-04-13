@@ -10,7 +10,7 @@ const REFRESH_COOKIE_MAX_AGE = 30 * 24 * 60 * 60 * 1000; // 30d
 export const cookieBase = () => ({
   httpOnly: true,
   secure: process.env.NODE_ENV === "production",
-  sameSite: "lax",
+  sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
   path: "/",
 });
 
