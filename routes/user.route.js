@@ -17,6 +17,11 @@ userRouter.post("/resend-otp", userController.resendOTP);
 userRouter.post("/verify-otp", userController.verifyOTP);
 userRouter.post("/reset-password", userController.resetPassword);
 userRouter.get("/me", userMiddleware.verifyToken, userController.getProfile);
+userRouter.put(
+  "/me/password",
+  userMiddleware.verifyToken,
+  userController.changePassword
+);
 userRouter.get("/", userMiddleware.verifyToken, userController.getUsers);
 userRouter.put("/:id", userMiddleware.verifyToken, userController.updateUser);
 userRouter.delete(

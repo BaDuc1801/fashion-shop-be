@@ -216,6 +216,49 @@ const userController = {
     }
   },
 
+  // CHANGE PASSWORD
+  changePassword: async (req, res) => {
+    try {
+      const { currentPassword, newPassword } = req.body || {};
+
+      if (!currentPassword || !newPassword) {
+        return res.status(400).json({
+          message: "currentPassword and newPassword are required",
+        });
+      }
+
+      if (String(newPassword).length < 6) {
+        return res
+          .status(400)
+          .json({ message: "Password must be at least 6 characters" });
+      }
+
+      const user = await userModel.findById(req.user.id);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const ok = await bcrypt.compare(currentPassword, user.password);
+      if (!ok) {
+        return res
+          .status(400)
+          .json({ message: "Current password is incorrect" });
+      }
+
+      user.password = await bcrypt.hash(newPassword, 10);
+      await user.save();
+
+      await userModel.findByIdAndUpdate(user._id, {
+        $unset: { refreshToken: 1 },
+      });
+      clearAuthCookies(res);
+
+      res.json({ message: "Password changed — please login again" });
+    } catch (err) {
+      res.status(500).json({ message: err.message });
+    }
+  },
+
   // DELETE USER
   deleteUser: async (req, res) => {
     try {
