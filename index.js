@@ -7,6 +7,14 @@ import cookieParser from "cookie-parser";
 import productRouter from "./routes/product.route.js";
 import uploadRouter from "./routes/upload.route.js";
 
+const mongoUri = process.env.MONGOCONNECT;
+if (!mongoUri) {
+  throw new Error("Missing MONGOCONNECT");
+}
+if (mongoose.connection.readyState !== 1) {
+  await mongoose.connect(mongoUri);
+}
+
 const corsOptions = {
   origin: [
     "https://fashion-shop-tau-three.vercel.app",
@@ -23,36 +31,16 @@ app.use(express.json());
 app.use(cors(corsOptions));
 app.use(cookieParser());
 
-async function connectDb() {
-  const uri = process.env.MONGOCONNECT;
-  if (!uri) {
-    throw new Error("Missing MONGOCONNECT");
-  }
-  if (mongoose.connection.readyState === 1) {
-    return;
-  }
-  await mongoose.connect(uri);
-}
-
 app.get("/", (req, res) => {
   res.status(200).json({ message: "hello!" });
 });
 app.use("/api/upload", uploadRouter);
 app.use("/api/products", productRouter);
 
-const isVercel = Boolean(process.env.VERCEL);
-
-if (!isVercel) {
-  connectDb()
-    .then(() => {
-      app.listen(8080, () => {
-        console.log("Server is running");
-      });
-    })
-    .catch((err) => {
-      console.error(err);
-      process.exit(1);
-    });
+if (!process.env.VERCEL) {
+  app.listen(8080, () => {
+    console.log("Server is running");
+  });
 }
 
 export default app;
