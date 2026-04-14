@@ -44,6 +44,7 @@ const productController = {
         search,
         categoryId,
         categorySlug,
+        categoryName,
       } = req.query;
 
       const query = {};
@@ -68,6 +69,21 @@ const productController = {
 
       if (categorySlug) {
         const category = await categoryModel.findOne({ slug: categorySlug });
+
+        if (!category) {
+          return res.json({
+            data: [],
+            total: 0,
+            page: Number(page),
+            totalPages: 0,
+          });
+        }
+
+        query.categoryId = category._id;
+      }
+
+      if (categoryName) {
+        const category = await categoryModel.findOne({ name: categoryName });
 
         if (!category) {
           return res.json({
@@ -123,7 +139,9 @@ const productController = {
     try {
       const { sku } = req.params;
 
-      const product = await productModel.findOne({ sku });
+      const product = await productModel
+        .findOne({ sku })
+        .populate("categoryId");
 
       if (!product) {
         return res.status(404).json({ message: "Not found" });

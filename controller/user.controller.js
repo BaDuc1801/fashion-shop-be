@@ -216,6 +216,11 @@ const userController = {
     try {
       const { body } = req;
 
+      if (!body.avatar) {
+        body.avatar =
+          "https://res.cloudinary.com/dzpw9bihb/image/upload/v1776063610/products/vynezdtx9rxrilgdrzas.jpg";
+      }
+
       const user = await userModel
         .findByIdAndUpdate(req.params.id, body, {
           new: true,

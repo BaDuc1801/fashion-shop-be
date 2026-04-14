@@ -8,6 +8,7 @@ import productRouter from "./routes/product.route.js";
 import uploadRouter from "./routes/upload.route.js";
 import userRouter from "./routes/user.route.js";
 import categoryRouter from "./routes/category.route.js";
+import voucherRouter from "./routes/voucher.route.js";
 
 const mongoUri = process.env.MONGOCONNECT;
 if (!mongoUri) {
@@ -40,6 +41,7 @@ app.use("/api/upload", uploadRouter);
 app.use("/api/products", productRouter);
 app.use("/api/users", userRouter);
 app.use("/api/categories", categoryRouter);
+app.use("/api/vouchers", voucherRouter);
 
 if (!process.env.VERCEL) {
   app.listen(8080, () => {
