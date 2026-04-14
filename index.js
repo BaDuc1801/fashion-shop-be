@@ -7,6 +7,7 @@ import cookieParser from "cookie-parser";
 import productRouter from "./routes/product.route.js";
 import uploadRouter from "./routes/upload.route.js";
 import userRouter from "./routes/user.route.js";
+import categoryRouter from "./routes/category.route.js";
 
 const mongoUri = process.env.MONGOCONNECT;
 if (!mongoUri) {
@@ -38,6 +39,7 @@ app.get("/", (req, res) => {
 app.use("/api/upload", uploadRouter);
 app.use("/api/products", productRouter);
 app.use("/api/users", userRouter);
+app.use("/api/categories", categoryRouter);
 
 if (!process.env.VERCEL) {
   app.listen(8080, () => {

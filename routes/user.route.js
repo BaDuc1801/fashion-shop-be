@@ -17,6 +17,7 @@ userRouter.post("/resend-otp", userController.resendOTP);
 userRouter.post("/verify-otp", userController.verifyOTP);
 userRouter.post("/reset-password", userController.resetPassword);
 userRouter.get("/me", userMiddleware.verifyToken, userController.getProfile);
+userRouter.get("/:id", userMiddleware.verifyToken, userController.getUserById);
 userRouter.put(
   "/me/password",
   userMiddleware.verifyToken,
@@ -28,6 +29,11 @@ userRouter.delete(
   "/:id",
   userMiddleware.verifyToken,
   userController.deleteUser
+);
+userRouter.post(
+  "/invite",
+  userMiddleware.verifyToken,
+  userController.inviteUser
 );
 
 export default userRouter;

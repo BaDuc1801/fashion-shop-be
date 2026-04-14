@@ -1,3 +1,4 @@
+import categoryModel from "../model/category.model.js";
 import productModel from "../model/product.model.js";
 
 const productController = {
@@ -6,6 +7,11 @@ const productController = {
     try {
       const { body } = req;
 
+      const category = await categoryModel.findById(body.categoryId);
+      if (!category) {
+        return res.status(400).json({ message: "Category not found" });
+      }
+
       const product = await productModel.create({
         name: body.name,
         sku: body.sku,
@@ -13,6 +19,7 @@ const productController = {
         status: body.status || "active",
         images: body.images || [],
         sizeVariants: body.sizeVariants || [],
+        categoryId: body.categoryId,
       });
 
       res.status(201).json(product);
@@ -35,6 +42,8 @@ const productController = {
         maxPrice,
         status,
         search,
+        categoryId,
+        categorySlug,
       } = req.query;
 
       const query = {};
@@ -51,7 +60,25 @@ const productController = {
         query.$or = [
           { name: { $regex: search.trim(), $options: "i" } },
           { sku: { $regex: search.trim(), $options: "i" } },
+          { "categoryId.name": { $regex: search.trim(), $options: "i" } },
         ];
+      }
+
+      if (categoryId) query.categoryId = categoryId;
+
+      if (categorySlug) {
+        const category = await categoryModel.findOne({ slug: categorySlug });
+
+        if (!category) {
+          return res.json({
+            data: [],
+            total: 0,
+            page: Number(page),
+            totalPages: 0,
+          });
+        }
+
+        query.categoryId = category._id;
       }
 
       const skip = (page - 1) * limit;
@@ -61,7 +88,8 @@ const productController = {
           .find(query)
           .sort({ createdAt: -1 })
           .skip(skip)
-          .limit(Number(limit)),
+          .limit(Number(limit))
+          .populate("categoryId"),
 
         productModel.countDocuments(query),
       ]);

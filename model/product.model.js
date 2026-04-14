@@ -26,6 +26,13 @@ const ProductSchema = new mongoose.Schema(
     images: [{ type: String }],
 
     sizeVariants: [SizeSchema],
+
+    categoryId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "category",
+      required: true,
+      index: true,
+    },
   },
   { timestamps: true }
 );

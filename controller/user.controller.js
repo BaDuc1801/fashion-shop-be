@@ -3,7 +3,10 @@ import { generateOTP } from "../utils/otp.util.js";
 import userModel from "../model/user.model.js";
 import {
   clearAuthCookies,
+  cookieBase,
   parseRefreshToken,
+  REFRESH_COOKIE_MAX_AGE,
+  sendInviteEmail,
   toPublicUser,
 } from "../utils/user.util.js";
 import { sendOtpEmail } from "../utils/user.util.js";
@@ -46,6 +49,7 @@ const userController = {
         name: body.name,
         email: body.email,
         password: hashedPassword,
+        phone: body.phone,
         avatar:
           body.avatar ||
           "https://res.cloudinary.com/dzpw9bihb/image/upload/v1776063610/products/vynezdtx9rxrilgdrzas.jpg",
@@ -192,6 +196,16 @@ const userController = {
         page: Number(page),
         totalPages: Math.ceil(total / limit),
       });
+    } catch (err) {
+      res.status(500).json({ message: err.message });
+    }
+  },
+
+  // GET USER BY ID
+  getUserById: async (req, res) => {
+    try {
+      const user = await userModel.findById(req.params.id).select("-password");
+      res.json(user);
     } catch (err) {
       res.status(500).json({ message: err.message });
     }
@@ -439,6 +453,93 @@ const userController = {
       res.json({ message: "Password updated — please login again" });
     } catch (err) {
       res.status(500).json({ message: err.message });
+    }
+  },
+
+  //Invite User
+  inviteUser: async (req, res) => {
+    try {
+      const {
+        name,
+        email,
+        role = "staff",
+        phone,
+        salary,
+        joinDate,
+        avatar,
+        status,
+      } = req.body;
+
+      if (!name || !email) {
+        return res.status(400).json({
+          message: "name and email are required",
+        });
+      }
+
+      if (!["staff", "admin"].includes(role)) {
+        return res.status(400).json({
+          message: "role must be staff or admin",
+        });
+      }
+
+      const existed = await userModel.findOne({ email });
+      if (existed) {
+        return res.status(400).json({
+          message: "Email already exists",
+        });
+      }
+
+      const defaultPassword = "123456";
+      const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+
+      const user = await userModel.create({
+        name,
+        email,
+        password: hashedPassword,
+        role,
+        provider: "local",
+        isVerified: true,
+        status,
+        phone,
+        salary,
+        joinDate,
+        avatar,
+      });
+
+      const subject = `Invitation to join Fashion Store as ${role.toUpperCase()}`;
+
+      const html = `
+        <h2>Hello ${name},</h2>
+  
+        <p>You have been invited to join <b>Fashion Store</b> as <b>${role.toUpperCase()}</b>.</p>
+  
+        <h3>Your login credentials:</h3>
+        <p><b>Email:</b> ${email}</p>
+        <p><b>Password:</b> 123456</p>
+  
+        <p>
+          Please login here:<br/>
+          <a href="https://fashion-shop-admin-topaz.vercel.app/">
+            https://fashion-shop-admin-topaz.vercel.app/
+          </a>
+        </p>
+  
+        <p style="color:red;">
+          After logging in, please change your password for security reasons.
+        </p>
+  
+        <br/>
+        <p>Welcome aboard 🚀</p>
+      `;
+
+      await sendOtpEmail(email, subject, "INVITE", html);
+
+      return res.status(201).json({
+        message: "User invited successfully",
+        user: toPublicUser(user),
+      });
+    } catch (err) {
+      return res.status(500).json({ message: err.message });
     }
   },
 };

@@ -5,7 +5,7 @@ import bcrypt from "bcryptjs";
 import userModel from "../model/user.model.js";
 
 const ACCESS_EXPIRES = "15m";
-const REFRESH_COOKIE_MAX_AGE = 30 * 24 * 60 * 60 * 1000; // 30d
+export const REFRESH_COOKIE_MAX_AGE = 30 * 24 * 60 * 60 * 1000;
 
 export const cookieBase = () => ({
   httpOnly: true,
@@ -77,5 +77,14 @@ export const sendOtpEmail = async (to, subject, otp, hint) => {
       <p>Code OTP: <b>${otp}</b></p>
       <p>Expires in 5 minutes.</p>
     `,
+  });
+};
+
+export const sendInviteEmail = async (to, subject, html) => {
+  await transporter.sendMail({
+    from: `"fashion-shop" <${process.env.MAIL_USER}>`,
+    to,
+    subject,
+    html,
   });
 };
