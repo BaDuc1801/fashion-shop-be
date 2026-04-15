@@ -16,7 +16,7 @@ export const cookieBase = () => ({
 
 export const generateAccessToken = (user) => {
   return jwt.sign({ id: user._id, role: user.role }, process.env.SECRET_KEY, {
-    expiresIn: 10,
+    expiresIn: ACCESS_EXPIRES,
   });
 };
 
@@ -45,7 +45,7 @@ export const setAuthCookies = async (res, user) => {
   const refreshVal = await issueRefreshToken(user._id);
   res.cookie("access_token", access, {
     ...cookieBase(),
-    maxAge: 10 * 1000,
+    maxAge: 15 * 60 * 1000,
   });
   res.cookie("refresh_token", refreshVal, {
     ...cookieBase(),
