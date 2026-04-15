@@ -16,6 +16,7 @@ const productController = {
         name: body.name,
         sku: body.sku,
         price: body.price,
+        description: body.description,
         status: body.status || "active",
         images: body.images || [],
         sizeVariants: body.sizeVariants || [],
