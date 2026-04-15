@@ -30,6 +30,20 @@ const userMiddleware = {
       res.status(401).json({ message: "Access token is missing" });
     }
   },
+  optionalAuth: (req, res, next) => {
+    try {
+      const token = req.cookies.access_token;
+  
+      if (token) {
+        const decoded = jwt.verify(token, process.env.SECRET_KEY);
+        req.user = decoded;
+      }
+    } catch (err) {
+      console.log("JWT ERROR:", err.message); // 👈 thêm dòng này
+    }
+  
+    next();
+  },
 };
 
 export default userMiddleware;

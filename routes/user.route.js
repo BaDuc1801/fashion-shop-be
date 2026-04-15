@@ -35,5 +35,12 @@ userRouter.post(
   userMiddleware.verifyToken,
   userController.inviteUser
 );
+userRouter.post("/wishlist", userMiddleware.verifyToken, userController.addToWishlist);
+userRouter.delete("/wishlist/:productId", userMiddleware.verifyToken, userController.removeFromWishlist);
+userRouter.post("/cart", userMiddleware.verifyToken, userController.addToCart);
+userRouter.delete("/cart/:productId", userMiddleware.verifyToken, userController.removeFromCart);
+userRouter.put("/me/cart", userMiddleware.verifyToken, userController.updateCartItem);
+userRouter.get("/me/wishlist", userMiddleware.verifyToken, userController.getWishlist);
+userRouter.get("/me/cart", userMiddleware.verifyToken, userController.getCart);
 
 export default userRouter;

@@ -1,5 +1,6 @@
 import categoryModel from "../model/category.model.js";
 import productModel from "../model/product.model.js";
+import userModel from "../model/user.model.js";
 
 const productController = {
   // CREATE
@@ -139,16 +140,30 @@ const productController = {
   getProductBySku: async (req, res) => {
     try {
       const { sku } = req.params;
-
-      const product = await productModel
-        .findOne({ sku })
-        .populate("categoryId");
+  
+      const [product, user] = await Promise.all([
+        productModel.findOne({ sku }).populate("categoryId"),
+        req.user ? userModel.findById(req.user.id) : null,
+      ]);
 
       if (!product) {
         return res.status(404).json({ message: "Not found" });
       }
-
-      res.json(product);
+  
+      let inWishlist = false;
+  
+      if (user?.wishlist?.length) {
+        const wishlistSet = new Set(
+          user.wishlist.map((id) => id.toString())
+        );
+  
+        inWishlist = wishlistSet.has(product._id.toString());
+      }
+  
+      res.json({
+        ...product.toObject(),
+        inWishlist,
+      });
     } catch (err) {
       res.status(500).json({ message: err.message });
     }
