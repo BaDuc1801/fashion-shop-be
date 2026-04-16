@@ -11,6 +11,7 @@ import {
   mapVNPayResponseMessage,
   verifyVNPayCallback,
 } from "../services/payment/vnpay.service.js";
+import userModel from "../model/user.model.js";
 
 const PAYMENT_EXPIRE_MINUTES = 15;
 
@@ -41,12 +42,10 @@ const upsertVNPayProcessing = async (order) => {
 const processVNPayResult = async (params) => {
   let order = await orderModel.findOne({ orderCode: params.vnp_TxnRef });
 
-  // Backward compatibility: some old payment links used order _id as TxnRef.
   if (!order && mongoose.Types.ObjectId.isValid(params.vnp_TxnRef)) {
     order = await orderModel.findById(params.vnp_TxnRef);
   }
 
-  // Fallback by payment session txnRef to avoid mismatch across old/new formats.
   if (!order) {
     const paymentByTxnRef = await paymentModel
       .findOne({ provider: "vnpay", txnRef: params.vnp_TxnRef })
@@ -98,6 +97,28 @@ const processVNPayResult = async (params) => {
     await order.save();
     await finalizeReservedStock(order.items);
 
+    await userModel.updateOne(
+      { _id: order.userId },
+      {
+        $push: {
+          purchaseHistory: {
+            orderId: order._id,
+            purchasedAt: order.paidAt || new Date(),
+            totalAmount: order.total,
+
+            status:
+              order.orderStatus === "confirmed" ? "completed" : "shipping",
+
+            items: order.items.map((i) => ({
+              productName: i.nameSnapshot,
+              quantity: i.quantity,
+              unitPrice: i.price,
+            })),
+          },
+        },
+      }
+    );
+
     return {
       ok: true,
       code: "00",
@@ -125,9 +146,6 @@ const processVNPayResult = async (params) => {
   };
 };
 
-/**
- * CREATE PAYMENT URL
- */
 export const createVNPayPayment = async (req, res) => {
   try {
     const { orderId } = req.body;
@@ -167,9 +185,6 @@ export const createVNPayPayment = async (req, res) => {
   }
 };
 
-/**
- * IPN (WEBHOOK FROM VNPay)
- */
 export const vnpayIPN = async (req, res) => {
   try {
     const params = req.query;
@@ -187,9 +202,6 @@ export const vnpayIPN = async (req, res) => {
   }
 };
 
-/**
- * RETURN URL (FRONTEND REDIRECT ONLY)
- */
 export const vnpayReturn = (req, res) => {
   const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
 
@@ -198,11 +210,16 @@ export const vnpayReturn = (req, res) => {
     const isValid = verifyVNPayCallback(params);
 
     if (!isValid) {
-      return res.redirect(`${frontendUrl}/payment/failed?reason=invalid-signature`);
+      return res.redirect(
+        `${frontendUrl}/payment/failed?reason=invalid-signature`
+      );
     }
 
     const result = await processVNPayResult(params);
-    const status = result.responseCode === "00" || result.code === "02" ? "success" : "failed";
+    const status =
+      result.responseCode === "00" || result.code === "02"
+        ? "success"
+        : "failed";
 
     const query =
       `status=${encodeURIComponent(status)}` +

@@ -84,7 +84,7 @@ const UserSchema = new mongoose.Schema(
         ref: "product",
       },
     ],
-    
+
     cart: [
       {
         product: {
@@ -95,6 +95,39 @@ const UserSchema = new mongoose.Schema(
         size: { type: String, required: true },
         color: { type: String, required: true },
         quantity: { type: Number, required: true },
+      },
+    ],
+
+    purchaseHistory: [
+      {
+        orderId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "order",
+        },
+
+        purchasedAt: {
+          type: Date,
+          required: true,
+        },
+
+        totalAmount: {
+          type: Number,
+          required: true,
+        },
+
+        status: {
+          type: String,
+          enum: ["completed", "cancelled", "shipping", "delivered", "pending"],
+          required: true,
+        },
+
+        items: [
+          {
+            productName: String,
+            quantity: Number,
+            unitPrice: Number,
+          },
+        ],
       },
     ],
   },

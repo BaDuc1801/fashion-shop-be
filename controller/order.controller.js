@@ -125,7 +125,9 @@ const orderController = {
       }
 
       if (paymentMethod === "vnpay") {
-        const expiresAt = new Date(Date.now() + PAYMENT_EXPIRE_MINUTES * 60 * 1000);
+        const expiresAt = new Date(
+          Date.now() + PAYMENT_EXPIRE_MINUTES * 60 * 1000
+        );
 
         const payment = await paymentModel.findOneAndUpdate(
           { orderId: order._id, provider: "vnpay" },
