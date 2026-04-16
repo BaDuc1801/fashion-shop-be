@@ -9,6 +9,8 @@ import uploadRouter from "./routes/upload.route.js";
 import userRouter from "./routes/user.route.js";
 import categoryRouter from "./routes/category.route.js";
 import voucherRouter from "./routes/voucher.route.js";
+import orderRouter from "./routes/order.route.js";
+import paymentRouter from "./routes/payment.route.js";
 
 const mongoUri = process.env.MONGOCONNECT;
 if (!mongoUri) {
@@ -42,6 +44,8 @@ app.use("/api/products", productRouter);
 app.use("/api/users", userRouter);
 app.use("/api/categories", categoryRouter);
 app.use("/api/vouchers", voucherRouter);
+app.use("/api/orders", orderRouter);
+app.use("/api/payments", paymentRouter);
 
 if (!process.env.VERCEL) {
   app.listen(8080, () => {

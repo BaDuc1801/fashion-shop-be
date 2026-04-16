@@ -140,7 +140,7 @@ const productController = {
   getProductBySku: async (req, res) => {
     try {
       const { sku } = req.params;
-  
+
       const [product, user] = await Promise.all([
         productModel.findOne({ sku }).populate("categoryId"),
         req.user ? userModel.findById(req.user.id) : null,
@@ -149,17 +149,15 @@ const productController = {
       if (!product) {
         return res.status(404).json({ message: "Not found" });
       }
-  
+
       let inWishlist = false;
-  
+
       if (user?.wishlist?.length) {
-        const wishlistSet = new Set(
-          user.wishlist.map((id) => id.toString())
-        );
-  
+        const wishlistSet = new Set(user.wishlist.map((id) => id.toString()));
+
         inWishlist = wishlistSet.has(product._id.toString());
       }
-  
+
       res.json({
         ...product.toObject(),
         inWishlist,
@@ -204,6 +202,32 @@ const productController = {
       res.json({ message: "Deleted" });
     } catch (err) {
       res.status(500).json({ message: err.message });
+    }
+  },
+
+  decreaseStock: async (items) => {
+    try {
+      for (const item of items) {
+        const product = await productModel.findById(item.productId);
+
+        if (!product) continue;
+
+        const sizeIndex = product.sizeVariants.findIndex(
+          (s) => s.size === item.size
+        );
+
+        if (sizeIndex === -1) continue;
+
+        product.sizeVariants[sizeIndex].stock -= item.quantity;
+
+        if (product.sizeVariants[sizeIndex].stock < 0) {
+          product.sizeVariants[sizeIndex].stock = 0;
+        }
+
+        await product.save();
+      }
+    } catch (err) {
+      return res.status(500).json({ message: err.message });
     }
   },
 };

@@ -42,6 +42,33 @@ const VoucherSchema = new mongoose.Schema(
       enum: ["active", "inactive"],
       default: "active",
     },
+
+    maxUsage: {
+      type: Number,
+      default: null, // null = unlimited
+    },
+
+    usedCount: {
+      type: Number,
+      default: 0,
+    },
+
+    usedBy: [
+      {
+        userId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "user",
+        },
+        orderId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "order",
+        },
+        usedAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
   },
   { timestamps: true }
 );
