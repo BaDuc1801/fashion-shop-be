@@ -88,3 +88,36 @@ export const sendInviteEmail = async (to, subject, html) => {
     html,
   });
 };
+
+export const sendOrderSuccessEmail = async ({ user, order }) => {
+  const itemsHtml = order.items
+    .map(
+      (i) => `
+      <li>
+        ${i.nameSnapshot} - ${i.size || ""}/${i.color || ""}
+        x${i.quantity} - ${i.price.toLocaleString()} VND
+      </li>
+    `
+    )
+    .join("");
+
+  const html = `
+    <div>
+      <h2>🎉 Payment Successful</h2>
+      <p>Order Code: <b>${order.orderCode}</b></p>
+      <p>Total Amount: <b>${order.total.toLocaleString()} VND</b></p>
+
+      <h3>Order Details:</h3>
+      <ul>${itemsHtml}</ul>
+
+      <p>Thank you for your purchase ❤️</p>
+    </div>
+  `;
+
+  await transporter.sendMail({
+    from: `"Shop" <${process.env.EMAIL_USER}>`,
+    to: user.email,
+    subject: `Order ${order.orderCode} has been successfully paid`,
+    html,
+  });
+};

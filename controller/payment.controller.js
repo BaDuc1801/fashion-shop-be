@@ -12,6 +12,7 @@ import {
   verifyVNPayCallback,
 } from "../services/payment/vnpay.service.js";
 import userModel from "../model/user.model.js";
+import { sendOrderSuccessEmail } from "../utils/user.util.js";
 
 const PAYMENT_EXPIRE_MINUTES = 15;
 
@@ -105,19 +106,26 @@ const processVNPayResult = async (params) => {
             orderId: order._id,
             purchasedAt: order.paidAt || new Date(),
             totalAmount: order.total,
-
-            status:
-              order.orderStatus === "confirmed" ? "completed" : "shipping",
+            status: order.orderStatus,
 
             items: order.items.map((i) => ({
               productName: i.nameSnapshot,
               quantity: i.quantity,
+              size: i.size,
+              color: i.color,
               unitPrice: i.price,
             })),
           },
         },
       }
     );
+
+    const user = await userModel.findById(order.userId);
+
+    await sendOrderSuccessEmail({
+      user,
+      order,
+    });
 
     return {
       ok: true,
