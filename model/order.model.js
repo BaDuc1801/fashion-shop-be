@@ -120,6 +120,11 @@ const OrderSchema = new mongoose.Schema(
       index: true,
     },
 
+    paidAt: {
+      type: Date,
+      default: null,
+    },
+
     orderStatus: {
       type: String,
       enum: ["pending", "confirmed", "shipping", "delivered", "cancelled"],

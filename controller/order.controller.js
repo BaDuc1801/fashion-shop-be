@@ -6,6 +6,9 @@ import {
   releaseReservedStock,
 } from "../services/payment/stock.service.js";
 import { createVNPayUrl } from "../services/payment/vnpay.service.js";
+import paymentModel from "../model/payment.model.js";
+
+const PAYMENT_EXPIRE_MINUTES = 15;
 
 const orderController = {
   createOrder: async (req, res) => {
@@ -118,6 +121,36 @@ const orderController = {
         await order.deleteOne();
         return res.status(400).json({
           message: err.message || "Reserve stock failed",
+        });
+      }
+
+      if (paymentMethod === "vnpay") {
+        const expiresAt = new Date(Date.now() + PAYMENT_EXPIRE_MINUTES * 60 * 1000);
+
+        const payment = await paymentModel.findOneAndUpdate(
+          { orderId: order._id, provider: "vnpay" },
+          {
+            orderId: order._id,
+            userId: order.userId,
+            provider: "vnpay",
+            amount: order.total,
+            status: "processing",
+            txnRef: order.orderCode,
+            expiresAt,
+          },
+          { upsert: true, new: true }
+        );
+
+        order.paymentStatus = "processing";
+        order.paymentId = payment._id;
+        await order.save();
+
+        return res.status(201).json({
+          message: "Order created",
+          order,
+          paymentUrl: createVNPayUrl(order, req, PAYMENT_EXPIRE_MINUTES),
+          paymentId: payment._id,
+          expiresAt: payment.expiresAt,
         });
       }
 

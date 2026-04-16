@@ -1,8 +1,129 @@
 import orderModel from "../model/order.model.js";
+import paymentModel from "../model/payment.model.js";
+import mongoose from "mongoose";
+import {
+  finalizeReservedStock,
+  releaseReservedStock,
+  reserveStock,
+} from "../services/payment/stock.service.js";
 import {
   createVNPayUrl,
-  verifyVNPayIPN,
+  mapVNPayResponseMessage,
+  verifyVNPayCallback,
 } from "../services/payment/vnpay.service.js";
+
+const PAYMENT_EXPIRE_MINUTES = 15;
+
+const upsertVNPayProcessing = async (order) => {
+  const expiresAt = new Date(Date.now() + PAYMENT_EXPIRE_MINUTES * 60 * 1000);
+
+  const payment = await paymentModel.findOneAndUpdate(
+    { orderId: order._id, provider: "vnpay" },
+    {
+      orderId: order._id,
+      userId: order.userId,
+      provider: "vnpay",
+      amount: order.total,
+      status: "processing",
+      txnRef: order.orderCode,
+      expiresAt,
+    },
+    { upsert: true, new: true }
+  );
+
+  order.paymentId = payment._id;
+  order.paymentStatus = "processing";
+  await order.save();
+
+  return payment;
+};
+
+const processVNPayResult = async (params) => {
+  let order = await orderModel.findOne({ orderCode: params.vnp_TxnRef });
+
+  // Backward compatibility: some old payment links used order _id as TxnRef.
+  if (!order && mongoose.Types.ObjectId.isValid(params.vnp_TxnRef)) {
+    order = await orderModel.findById(params.vnp_TxnRef);
+  }
+
+  // Fallback by payment session txnRef to avoid mismatch across old/new formats.
+  if (!order) {
+    const paymentByTxnRef = await paymentModel
+      .findOne({ provider: "vnpay", txnRef: params.vnp_TxnRef })
+      .select("orderId");
+
+    if (paymentByTxnRef?.orderId) {
+      order = await orderModel.findById(paymentByTxnRef.orderId);
+    }
+  }
+
+  if (!order) return { ok: false, code: "01", message: "Order not found" };
+
+  const payment = await paymentModel.findOne({
+    orderId: order._id,
+    provider: "vnpay",
+  });
+  if (!payment) return { ok: false, code: "01", message: "Payment not found" };
+
+  if (order.paymentStatus === "paid" || payment.status === "success") {
+    return {
+      ok: true,
+      code: "02",
+      message: "Already paid",
+      responseCode: params.vnp_ResponseCode,
+      order,
+    };
+  }
+
+  const paidAmount = Number(params.vnp_Amount || 0) / 100;
+  if (Math.abs(paidAmount - Number(order.total || 0)) > 1) {
+    return { ok: false, code: "04", message: "Invalid amount" };
+  }
+
+  const isSuccess =
+    params.vnp_ResponseCode === "00" && params.vnp_TransactionStatus === "00";
+
+  payment.transactionId = params.vnp_TransactionNo;
+  payment.gatewayResponse = params;
+
+  if (isSuccess) {
+    payment.status = "success";
+
+    order.paymentStatus = "paid";
+    order.orderStatus = "confirmed";
+    order.transactionId = params.vnp_TransactionNo;
+    order.paidAt = new Date();
+
+    await payment.save();
+    await order.save();
+    await finalizeReservedStock(order.items);
+
+    return {
+      ok: true,
+      code: "00",
+      message: "Success",
+      responseCode: params.vnp_ResponseCode,
+      order,
+    };
+  }
+
+  payment.status = "failed";
+  order.paymentStatus = "failed";
+  // keep order as pending so user can retry payment
+  order.orderStatus = "pending";
+
+  await payment.save();
+  await order.save();
+  await releaseReservedStock(order.items);
+
+  return {
+    ok: true,
+    code: "00",
+    message: mapVNPayResponseMessage(params.vnp_ResponseCode),
+    responseCode: params.vnp_ResponseCode,
+    order,
+  };
+};
 
 /**
  * CREATE PAYMENT URL
@@ -21,11 +142,25 @@ export const createVNPayPayment = async (req, res) => {
     if (order.orderStatus === "cancelled")
       return res.status(400).json({ message: "Order cancelled" });
 
-    const paymentUrl = createVNPayUrl(order, req);
+    if (order.paymentStatus === "failed") {
+      try {
+        await reserveStock(order.items);
+      } catch (err) {
+        return res.status(400).json({
+          message: err.message || "Unable to reserve stock for retry payment",
+        });
+      }
+    }
+
+    const payment = await upsertVNPayProcessing(order);
+    const paymentUrl = createVNPayUrl(order, req, PAYMENT_EXPIRE_MINUTES);
 
     return res.json({
       paymentUrl,
       orderCode: order.orderCode,
+      orderId: order._id,
+      paymentId: payment._id,
+      expiresAt: payment.expiresAt,
     });
   } catch (err) {
     return res.status(500).json({ message: err.message });
@@ -39,42 +174,14 @@ export const vnpayIPN = async (req, res) => {
   try {
     const params = req.query;
 
-    const isValid = verifyVNPayIPN(params);
+    const isValid = verifyVNPayCallback(params);
 
     if (!isValid) {
       return res.json({ RspCode: "97", Message: "Invalid signature" });
     }
 
-    const order = await orderModel.findOne({
-      orderCode: params.vnp_TxnRef,
-    });
-
-    if (!order) {
-      return res.json({ RspCode: "01", Message: "Order not found" });
-    }
-
-    // idempotency
-    if (order.paymentStatus === "paid") {
-      return res.json({ RspCode: "02", Message: "Already paid" });
-    }
-
-    const isSuccess =
-      params.vnp_ResponseCode === "00" && params.vnp_TransactionStatus === "00";
-
-    if (isSuccess) {
-      order.paymentStatus = "paid";
-      order.orderStatus = "confirmed";
-      order.transactionId = params.vnp_TransactionNo;
-
-      await order.save();
-
-      return res.json({ RspCode: "00", Message: "Success" });
-    }
-
-    order.paymentStatus = "failed";
-    await order.save();
-
-    return res.json({ RspCode: "00", Message: "Failed" });
+    const result = await processVNPayResult(params);
+    return res.json({ RspCode: result.code, Message: result.message });
   } catch (err) {
     return res.status(500).json({ message: err.message });
   }
@@ -84,11 +191,29 @@ export const vnpayIPN = async (req, res) => {
  * RETURN URL (FRONTEND REDIRECT ONLY)
  */
 export const vnpayReturn = (req, res) => {
-  const { vnp_ResponseCode } = req.query;
+  const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
 
-  if (vnp_ResponseCode === "00") {
-    return res.redirect("http://localhost:3000/payment/success");
-  }
+  const redirect = async () => {
+    const params = req.query;
+    const isValid = verifyVNPayCallback(params);
 
-  return res.redirect("http://localhost:3000/payment/failed");
+    if (!isValid) {
+      return res.redirect(`${frontendUrl}/payment/failed?reason=invalid-signature`);
+    }
+
+    const result = await processVNPayResult(params);
+    const status = result.responseCode === "00" || result.code === "02" ? "success" : "failed";
+
+    const query =
+      `status=${encodeURIComponent(status)}` +
+      `&orderCode=${encodeURIComponent(params.vnp_TxnRef || "")}` +
+      `&txn=${encodeURIComponent(params.vnp_TransactionNo || "")}` +
+      `&message=${encodeURIComponent(result.message)}`;
+
+    return res.redirect(`${frontendUrl}/payment/result?${query}`);
+  };
+
+  return redirect().catch(() =>
+    res.redirect(`${frontendUrl}/payment/failed?reason=internal-error`)
+  );
 };
