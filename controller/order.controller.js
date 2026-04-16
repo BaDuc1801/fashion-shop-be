@@ -9,6 +9,7 @@ import { createVNPayUrl } from "../services/payment/vnpay.service.js";
 import paymentModel from "../model/payment.model.js";
 import { createMoMoUrl } from "../services/payment/momo.service.js";
 import { createSePayPayload } from "../services/payment/sepay.service.js";
+import { updateUserCartAfterOrder } from "../services/user/user.service.js";
 
 const PAYMENT_EXPIRE_MINUTES = 15;
 
@@ -89,7 +90,7 @@ const orderController = {
       }
 
       const shippingFee = 0;
-      const total = subtotal - discountAmount + shippingFee;
+      const total = (subtotal - discountAmount + shippingFee) * 26000;
 
       // =====================
       // 3. CREATE ORDER FIRST (DRAFT)
@@ -148,6 +149,7 @@ const orderController = {
         order.paymentStatus = "processing";
         order.paymentId = payment._id;
         await order.save();
+        await updateUserCartAfterOrder(order);
 
         return res.status(201).json({
           message: "Order created",
@@ -182,6 +184,7 @@ const orderController = {
         await order.save();
 
         const momo = await createMoMoUrl(order, req);
+        await updateUserCartAfterOrder(order);
 
         return res.status(201).json({
           message: "Order created",
@@ -215,6 +218,7 @@ const orderController = {
         await order.save();
 
         const sepay = createSePayPayload(order);
+        await updateUserCartAfterOrder(order);
 
         return res.status(201).json({
           message: "Order created",
@@ -228,6 +232,7 @@ const orderController = {
         });
       }
 
+      await updateUserCartAfterOrder(order);
       return res.status(201).json({
         message: "Order created",
         order,
@@ -242,16 +247,43 @@ const orderController = {
   getMyOrders: async (req, res) => {
     try {
       const userId = req.user.id;
+      const { page = 1, limit = 10 } = req.query;
+      const orders = await orderModel.find({ userId }).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit);
+      const total = await orderModel.countDocuments({ userId });
+      const totalPages = Math.ceil(total / limit);
 
-      const orders = await orderModel.find({ userId }).sort({ createdAt: -1 });
-
-      return res.json(orders);
+      return res.json({
+        orders,
+        total,
+        totalPages,
+        page: Number(page),
+      });
     } catch (err) {
       return res.status(500).json({
         message: err.message,
       });
     }
   },
+
+  getAllOrders: async (req, res) => {
+    try {
+      const { page = 1, limit = 10 } = req.query;
+      const orders = await orderModel.find().populate("userId").sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit);
+      const total = await orderModel.countDocuments();
+      const totalPages = Math.ceil(total / limit);
+      return res.json({
+        orders,
+        total,
+        totalPages,
+        page: Number(page),
+      });
+    } catch (err) {
+      return res.status(500).json({
+        message: err.message,
+      });
+    }
+  },
+
   getOrderById: async (req, res) => {
     try {
       const order = await orderModel.findById(req.params.id);

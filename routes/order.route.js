@@ -5,6 +5,7 @@ import userMiddleware from "../middleware/user.middleware.js";
 const orderRouter = express.Router();
 
 orderRouter.post("/", userMiddleware.verifyToken, orderController.createOrder);
+orderRouter.get("/", userMiddleware.verifyToken, orderController.getAllOrders);
 orderRouter.get(
   "/my-orders",
   userMiddleware.verifyToken,

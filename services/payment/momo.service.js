@@ -20,7 +20,7 @@ export const createMoMoUrl = (order, req, expireMinutes = 15) => {
       process.env.MOMO_RETURN_URL ||
       `${req.protocol}://${req.get("host")}/api/payments/momo/return`;
 
-    const ipnUrl = process.env.MOMO_IPN_URL;
+    const ipnUrl = process.env.MOMO_IPN_URL || "http://localhost:8080/api/payments/momo/ipn";
 
     const requestType = "payWithMethod";
     const extraData = "";

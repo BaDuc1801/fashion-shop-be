@@ -119,7 +119,7 @@ const processVNPayResult = async (params) => {
     payment.status = "success";
 
     order.paymentStatus = "paid";
-    order.orderStatus = "confirmed";
+    order.orderStatus = "completed";
     order.transactionId = params.vnp_TransactionNo;
     order.paidAt = new Date();
 
@@ -204,7 +204,7 @@ const processMoMoResult = async (data) => {
   if (Number(data.resultCode) === 0) {
     payment.status = "success";
     order.paymentStatus = "paid";
-    order.orderStatus = "confirmed";
+    order.orderStatus = "completed";
     order.transactionId = data.transId ? String(data.transId) : null;
     order.paidAt = new Date();
 
@@ -413,7 +413,7 @@ export const sepayWebhook = async (req, res) => {
     payment.gatewayResponse = data;
 
     order.paymentStatus = "paid";
-    order.orderStatus = "confirmed";
+    order.orderStatus = "completed";
     order.transactionId = data.transactionId;
     order.paidAt = new Date();
 

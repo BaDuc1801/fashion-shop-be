@@ -88,6 +88,7 @@ const OrderSchema = new mongoose.Schema(
 
     shippingAddress: {
       name: String,
+      email: String,
       phone: String,
       address: String,
     },
@@ -127,7 +128,7 @@ const OrderSchema = new mongoose.Schema(
 
     orderStatus: {
       type: String,
-      enum: ["pending", "confirmed", "shipping", "delivered", "cancelled"],
+      enum: ["pending", "completed", "shipping", "delivered", "cancelled"],
       default: "pending",
       index: true,
     },
