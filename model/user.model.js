@@ -126,6 +126,8 @@ const UserSchema = new mongoose.Schema(
             productName: String,
             quantity: Number,
             unitPrice: Number,
+            size: String,
+            color: String,
           },
         ],
       },
