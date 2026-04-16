@@ -1,6 +1,7 @@
 import orderModel from "../model/order.model.js";
 import paymentModel from "../model/payment.model.js";
 import mongoose from "mongoose";
+import crypto from "crypto";
 import {
   finalizeReservedStock,
   releaseReservedStock,
@@ -15,6 +16,34 @@ import userModel from "../model/user.model.js";
 import { sendOrderSuccessEmail } from "../utils/user.util.js";
 
 const PAYMENT_EXPIRE_MINUTES = 15;
+
+const appendPurchaseHistoryAndSendMail = async (order) => {
+  await userModel.updateOne(
+    { _id: order.userId },
+    {
+      $push: {
+        purchaseHistory: {
+          orderId: order._id,
+          purchasedAt: order.paidAt || new Date(),
+          totalAmount: order.total,
+          status: "completed",
+          items: order.items.map((i) => ({
+            productName: i.nameSnapshot,
+            quantity: i.quantity,
+            size: i.size,
+            color: i.color,
+            unitPrice: i.price,
+          })),
+        },
+      },
+    }
+  );
+
+  const user = await userModel.findById(order.userId);
+  if (user) {
+    await sendOrderSuccessEmail({ user, order });
+  }
+};
 
 const upsertVNPayProcessing = async (order) => {
   const expiresAt = new Date(Date.now() + PAYMENT_EXPIRE_MINUTES * 60 * 1000);
@@ -97,35 +126,7 @@ const processVNPayResult = async (params) => {
     await payment.save();
     await order.save();
     await finalizeReservedStock(order.items);
-
-    await userModel.updateOne(
-      { _id: order.userId },
-      {
-        $push: {
-          purchaseHistory: {
-            orderId: order._id,
-            purchasedAt: order.paidAt || new Date(),
-            totalAmount: order.total,
-            status: order.orderStatus,
-
-            items: order.items.map((i) => ({
-              productName: i.nameSnapshot,
-              quantity: i.quantity,
-              size: i.size,
-              color: i.color,
-              unitPrice: i.price,
-            })),
-          },
-        },
-      }
-    );
-
-    const user = await userModel.findById(order.userId);
-
-    await sendOrderSuccessEmail({
-      user,
-      order,
-    });
+    await appendPurchaseHistoryAndSendMail(order);
 
     return {
       ok: true,
@@ -150,6 +151,83 @@ const processVNPayResult = async (params) => {
     code: "00",
     message: mapVNPayResponseMessage(params.vnp_ResponseCode),
     responseCode: params.vnp_ResponseCode,
+    order,
+  };
+};
+
+const verifyMoMoSignature = (data = {}) => {
+  const rawSignature =
+    `accessKey=${process.env.MOMO_ACCESS_KEY}` +
+    `&amount=${data.amount || ""}` +
+    `&extraData=${data.extraData || ""}` +
+    `&message=${data.message || ""}` +
+    `&orderId=${data.orderId || ""}` +
+    `&orderInfo=${data.orderInfo || ""}` +
+    `&orderType=${data.orderType || ""}` +
+    `&partnerCode=${data.partnerCode || ""}` +
+    `&payType=${data.payType || ""}` +
+    `&requestId=${data.requestId || ""}` +
+    `&responseTime=${data.responseTime || ""}` +
+    `&resultCode=${data.resultCode ?? ""}` +
+    `&transId=${data.transId ?? ""}`;
+
+  const signature = crypto
+    .createHmac("sha256", process.env.MOMO_SECRET_KEY)
+    .update(rawSignature)
+    .digest("hex");
+
+  return signature === data.signature;
+};
+
+const processMoMoResult = async (data) => {
+  const order = await orderModel.findOne({ orderCode: data.orderId });
+  if (!order) return { ok: false, code: "01", message: "Order not found" };
+
+  const payment = await paymentModel.findOne({
+    orderId: order._id,
+    provider: "momo",
+  });
+  if (!payment) return { ok: false, code: "01", message: "Payment not found" };
+
+  if (order.paymentStatus === "paid" || payment.status === "success") {
+    return { ok: true, code: "02", message: "Already paid", order };
+  }
+
+  const paidAmount = Number(data.amount || 0);
+  if (Math.abs(paidAmount - Number(order.total || 0)) > 1) {
+    return { ok: false, code: "04", message: "Invalid amount" };
+  }
+
+  payment.transactionId = data.transId ? String(data.transId) : undefined;
+  payment.gatewayResponse = data;
+
+  if (Number(data.resultCode) === 0) {
+    payment.status = "success";
+    order.paymentStatus = "paid";
+    order.orderStatus = "confirmed";
+    order.transactionId = data.transId ? String(data.transId) : null;
+    order.paidAt = new Date();
+
+    await payment.save();
+    await order.save();
+    await finalizeReservedStock(order.items);
+    await appendPurchaseHistoryAndSendMail(order);
+
+    return { ok: true, code: "00", message: "Success", order };
+  }
+
+  payment.status = "failed";
+  order.paymentStatus = "failed";
+  order.orderStatus = "pending";
+
+  await payment.save();
+  await order.save();
+  await releaseReservedStock(order.items);
+
+  return {
+    ok: true,
+    code: "00",
+    message: data.message || "Payment failed",
     order,
   };
 };
@@ -241,4 +319,112 @@ export const vnpayReturn = (req, res) => {
   return redirect().catch(() =>
     res.redirect(`${frontendUrl}/payment/failed?reason=internal-error`)
   );
+};
+
+export const momoIPN = async (req, res) => {
+  try {
+    const data = req.body;
+
+    if (!verifyMoMoSignature(data)) {
+      return res.json({ RspCode: "97", message: "Invalid signature" });
+    }
+
+    const result = await processMoMoResult(data);
+    return res.json({ RspCode: result.code, message: result.message });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+export const momoReturn = (req, res) => {
+  const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+
+  const redirect = async () => {
+    const data = req.query;
+
+    if (!verifyMoMoSignature(data)) {
+      return res.redirect(
+        `${frontendUrl}/payment/failed?reason=invalid-signature`
+      );
+    }
+
+    const result = await processMoMoResult(data);
+    const status =
+      Number(data.resultCode) === 0 || result.code === "02"
+        ? "success"
+        : "failed";
+
+    const query =
+      `status=${encodeURIComponent(status)}` +
+      `&orderCode=${encodeURIComponent(data.orderId || "")}` +
+      `&txn=${encodeURIComponent(data.transId || "")}` +
+      `&message=${encodeURIComponent(result.message)}`;
+
+    return res.redirect(`${frontendUrl}/payment/result?${query}`);
+  };
+
+  return redirect().catch(() =>
+    res.redirect(`${frontendUrl}/payment/failed?reason=internal-error`)
+  );
+};
+
+export const sepayWebhook = async (req, res) => {
+  try {
+    const data = req.body;
+
+    /**
+     * SePay payload thường có:
+     * {
+     *   content: "ORD-xxx",
+     *   amount: 120000,
+     *   transactionId: "abc",
+     *   signature: "..."
+     * }
+     */
+
+    const order = await orderModel.findOne({
+      orderCode: data.content,
+    });
+
+    if (!order) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    const payment = await paymentModel.findOne({
+      orderId: order._id,
+      provider: "sepay",
+    });
+
+    if (!payment) {
+      return res.status(404).json({ message: "Payment not found" });
+    }
+
+    if (order.paymentStatus === "paid") {
+      return res.json({ message: "Already processed" });
+    }
+
+    // verify amount
+    if (Math.abs(Number(data.amount) - Number(order.total)) > 1) {
+      return res.status(400).json({ message: "Invalid amount" });
+    }
+
+    payment.status = "success";
+    payment.transactionId = data.transactionId;
+    payment.gatewayResponse = data;
+
+    order.paymentStatus = "paid";
+    order.orderStatus = "confirmed";
+    order.transactionId = data.transactionId;
+    order.paidAt = new Date();
+
+    await payment.save();
+    await order.save();
+
+    await finalizeReservedStock(order.items);
+    await appendPurchaseHistoryAndSendMail(order);
+
+    return res.json({ message: "OK" });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
 };

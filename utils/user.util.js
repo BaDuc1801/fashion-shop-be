@@ -115,7 +115,7 @@ export const sendOrderSuccessEmail = async ({ user, order }) => {
   `;
 
   await transporter.sendMail({
-    from: `"Shop" <${process.env.EMAIL_USER}>`,
+    from: `"Shop" <${process.env.MAIL_USER}>`,
     to: user.email,
     subject: `Order ${order.orderCode} has been successfully paid`,
     html,
