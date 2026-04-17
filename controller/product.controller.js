@@ -1,5 +1,6 @@
 import categoryModel from "../model/category.model.js";
 import productModel from "../model/product.model.js";
+import ratingModel from "../model/rating.model.js";
 import userModel from "../model/user.model.js";
 
 const productController = {
@@ -136,27 +137,46 @@ const productController = {
   getProductBySku: async (req, res) => {
     try {
       const { sku } = req.params;
+      const {limit = 10, page = 1} = req.query;
 
+      const limitNum = Number(limit);
+      const pageNum = Number(page);
+    const skip = (pageNum - 1) * limitNum;
+  
       const [product, user] = await Promise.all([
         productModel.findOne({ sku }).populate("categoryId"),
         req.user ? userModel.findById(req.user.id) : null,
       ]);
-
+  
       if (!product) {
         return res.status(404).json({ message: "Not found" });
       }
-
+  
+      const [reviews, stats] = await Promise.all([
+        ratingModel
+          .find({
+            productId: product._id,
+            isPublic: true,
+          })
+          .populate("userId", "name avatar")
+          .sort({ createdAt: -1 })
+          .limit(limitNum)
+          .skip(skip),
+        ratingModel.calcAverageRating(product._id),
+      ]);
+  
       let inWishlist = false;
-
+  
       if (user?.wishlist?.length) {
         const wishlistSet = new Set(user.wishlist.map((id) => id.toString()));
-
         inWishlist = wishlistSet.has(product._id.toString());
       }
-
+  
       res.json({
         ...product.toObject(),
         inWishlist,
+          reviews,
+        ratingStats: stats,
       });
     } catch (err) {
       res.status(500).json({ message: err.message });

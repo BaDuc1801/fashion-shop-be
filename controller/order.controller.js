@@ -10,6 +10,8 @@ import paymentModel from "../model/payment.model.js";
 import { createMoMoUrl } from "../services/payment/momo.service.js";
 import { createSePayPayload } from "../services/payment/sepay.service.js";
 import { updateUserCartAfterOrder } from "../services/user/user.service.js";
+import ratingModel from "../model/rating.model.js";
+import mongoose from "mongoose";
 
 const PAYMENT_EXPIRE_MINUTES = 15;
 
@@ -247,29 +249,72 @@ const orderController = {
 
   getMyOrders: async (req, res) => {
     try {
-      const userId = req.user.id;
+      const userId = new mongoose.Types.ObjectId(req.user.id);
       const { page = 1, limit = 10, search } = req.query;
+  
+      const pageNum = Number(page);
+      const limitNum = Number(limit);
+  
       const query = { userId };
+  
       if (search) {
         query.$or = [
           { orderCode: { $regex: search, $options: "i" } },
           { paymentMethod: { $regex: search, $options: "i" } },
         ];
       }
+  
       const orders = await orderModel
         .find(query)
         .sort({ createdAt: -1 })
-        .skip((page - 1) * limit)
-        .limit(limit)
+        .skip((pageNum - 1) * limitNum)
+        .limit(limitNum)
         .populate("discount.voucherId");
+  
       const total = await orderModel.countDocuments(query);
-      const totalPages = Math.ceil(total / limit);
-
+      const totalPages = Math.ceil(total / limitNum);
+  
+      const orderIds = orders.map((o) => o._id);
+  
+      const ratings = await ratingModel.find({
+        userId,
+        orderId: { $in: orderIds },
+      });
+  
+      const ratedSet = new Set(
+        ratings.map(
+          (r) => `${r.productId.toString()}_${r.orderId.toString()}`
+        )
+      );
+  
+      const updatedOrders = orders.map((order) => {
+        const newItems = order.items.map((item) => {
+          let reviewed = false;
+  
+          if (order.orderStatus === "completed") {
+            const key = `${item.productId.toString()}_${order._id.toString()}`;
+            reviewed = ratedSet.has(key);
+          }
+  
+          return {
+            ...item.toObject(),
+            reviewed,
+            canReview:
+              order.orderStatus === "completed" && !reviewed,
+          };
+        });
+  
+        return {
+          ...order.toObject(),
+          items: newItems,
+        };
+      });
+  
       return res.json({
-        orders,
+        orders: updatedOrders,
         total,
         totalPages,
-        page: Number(page),
+        page: pageNum,
       });
     } catch (err) {
       return res.status(500).json({
@@ -403,12 +448,6 @@ const orderController = {
         });
       }
 
-      if (!["pending", "processing"].includes(order.paymentStatus)) {
-        return res.status(400).json({
-          message: "Cannot cancel paid order",
-        });
-      }
-
       order.orderStatus = "cancelled";
       order.paymentStatus = "failed";
 
@@ -447,12 +486,6 @@ const orderController = {
 
       if (!order) {
         return res.status(404).json({ message: "Order not found" });
-      }
-
-      if (["completed", "cancelled"].includes(order.orderStatus)) {
-        return res.status(400).json({
-          message: "Cannot update finalized order",
-        });
       }
 
       order.orderStatus = orderStatus;
