@@ -12,6 +12,11 @@ orderRouter.get(
   orderController.getMyOrders
 );
 orderRouter.get(
+  "/user/:userId",
+  userMiddleware.verifyToken,
+  orderController.getOrdersByUserId
+);
+orderRouter.get(
   "/:id",
   userMiddleware.verifyToken,
   orderController.getOrderById

@@ -429,7 +429,9 @@ export const sepayWebhook = async (req, res) => {
 
     const orderCode = extractSePayOrderCode(data);
     if (!orderCode) {
-      return res.status(400).json({ message: "Order code not found in payload" });
+      return res
+        .status(400)
+        .json({ message: "Order code not found in payload" });
     }
 
     let order = await orderModel.findOne({ orderCode });

@@ -346,6 +346,49 @@ const orderController = {
       });
     }
   },
+
+  getOrdersByUserId: async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { page = 1, limit = 10, search } = req.query;
+
+      if (!userId) {
+        return res.status(400).json({ message: "userId is required" });
+      }
+
+      const skip = (Number(page) - 1) * Number(limit);
+
+      const query = { userId };
+
+      if (search) {
+        query.$or = [
+          { orderCode: { $regex: search, $options: "i" } },
+          { paymentMethod: { $regex: search, $options: "i" } },
+        ];
+      }
+
+      const orders = await orderModel
+        .find(query)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(Number(limit))
+        .populate("discount.voucherId");
+
+      const total = await orderModel.countDocuments(query);
+
+      return res.json({
+        orders,
+        total,
+        page: Number(page),
+        totalPages: Math.ceil(total / Number(limit)),
+      });
+    } catch (err) {
+      return res.status(500).json({
+        message: err.message,
+      });
+    }
+  },
+
   cancelOrder: async (req, res) => {
     try {
       const order = await orderModel.findById(req.params.id);
