@@ -352,6 +352,67 @@ export const momoReturn = (req, res) => {
   );
 };
 
+const extractSePayOrderCode = (payload = {}) => {
+  const candidates = [
+    payload?.content,
+    payload?.description,
+    payload?.transferContent,
+    payload?.data?.content,
+    payload?.data?.description,
+    payload?.data?.transferContent,
+  ];
+
+  for (const value of candidates) {
+    if (typeof value !== "string") continue;
+    const matched = value.match(/ORD[-\s]?\d+(?:-\d+)?/i);
+    if (matched?.[0]) return matched[0].toUpperCase();
+  }
+
+  return null;
+};
+
+const normalizeOrderCode = (value = "") =>
+  String(value)
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
+
+const extractSePayAmount = (payload = {}) => {
+  const candidates = [
+    payload?.amount,
+    payload?.transferAmount,
+    payload?.data?.amount,
+    payload?.data?.transferAmount,
+  ];
+
+  for (const value of candidates) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+
+  return 0;
+};
+
+const extractSePayTransactionId = (payload = {}) => {
+  const candidates = [
+    payload?.transactionId,
+    payload?.id,
+    payload?.transferId,
+    payload?.code,
+    payload?.data?.transactionId,
+    payload?.data?.id,
+    payload?.data?.transferId,
+    payload?.data?.code,
+  ];
+
+  for (const value of candidates) {
+    if (value === undefined || value === null) continue;
+    const id = String(value).trim();
+    if (id) return id;
+  }
+
+  return null;
+};
+
 export const sepayWebhook = async (req, res) => {
   try {
     const data = req.body;
@@ -366,9 +427,25 @@ export const sepayWebhook = async (req, res) => {
      * }
      */
 
-    const order = await orderModel.findOne({
-      orderCode: data.content,
-    });
+    const orderCode = extractSePayOrderCode(data);
+    if (!orderCode) {
+      return res.status(400).json({ message: "Order code not found in payload" });
+    }
+
+    let order = await orderModel.findOne({ orderCode });
+    if (!order) {
+      const normalizedIncomingCode = normalizeOrderCode(orderCode);
+      const pendingOrders = await orderModel.find({
+        paymentMethod: "sepay",
+        orderStatus: "pending",
+        paymentStatus: { $in: ["pending", "processing"] },
+      });
+      order =
+        pendingOrders.find(
+          (candidate) =>
+            normalizeOrderCode(candidate.orderCode) === normalizedIncomingCode
+        ) || null;
+    }
 
     if (!order) {
       return res.status(404).json({ message: "Order not found" });
@@ -388,17 +465,20 @@ export const sepayWebhook = async (req, res) => {
     }
 
     // verify amount
-    if (Math.abs(Number(data.amount) - Number(order.total)) > 1) {
+    const paidAmount = extractSePayAmount(data);
+    if (Math.abs(paidAmount - Number(order.total)) > 1) {
       return res.status(400).json({ message: "Invalid amount" });
     }
 
+    const transactionId = extractSePayTransactionId(data);
+
     payment.status = "success";
-    payment.transactionId = data.transactionId;
+    payment.transactionId = transactionId || undefined;
     payment.gatewayResponse = data;
 
     order.paymentStatus = "paid";
     order.orderStatus = "completed";
-    order.transactionId = data.transactionId;
+    order.transactionId = transactionId;
     order.paidAt = new Date();
 
     await payment.save();
