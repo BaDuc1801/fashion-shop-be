@@ -14,6 +14,11 @@ const OrderItemSchema = new mongoose.Schema(
       required: true,
     },
 
+    skuSnapshot: {
+      type: String,
+      default: "",
+    },
+
     imageSnapshot: {
       type: String,
       default: "",

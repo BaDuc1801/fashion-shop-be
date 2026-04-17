@@ -289,7 +289,7 @@ export const vnpayIPN = async (req, res) => {
 };
 
 export const vnpayReturn = (req, res) => {
-  const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+  const frontendUrl = process.env.FRONTEND_URL || "http://localhost:4201";
 
   const redirect = async () => {
     const params = req.query;
@@ -302,18 +302,10 @@ export const vnpayReturn = (req, res) => {
     }
 
     const result = await processVNPayResult(params);
-    const status =
-      result.responseCode === "00" || result.code === "02"
-        ? "success"
-        : "failed";
-
-    const query =
-      `status=${encodeURIComponent(status)}` +
-      `&orderCode=${encodeURIComponent(params.vnp_TxnRef || "")}` +
-      `&txn=${encodeURIComponent(params.vnp_TransactionNo || "")}` +
-      `&message=${encodeURIComponent(result.message)}`;
-
-    return res.redirect(`${frontendUrl}/payment/result?${query}`);
+    const orderId = result.order?._id ? String(result.order._id) : "";
+    return res.redirect(
+      `${frontendUrl}/payment/processing?orderId=${encodeURIComponent(orderId)}`
+    );
   };
 
   return redirect().catch(() =>
@@ -337,7 +329,7 @@ export const momoIPN = async (req, res) => {
 };
 
 export const momoReturn = (req, res) => {
-  const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+  const frontendUrl = process.env.FRONTEND_URL || "http://localhost:4201";
 
   const redirect = async () => {
     const data = req.query;
@@ -349,18 +341,10 @@ export const momoReturn = (req, res) => {
     }
 
     const result = await processMoMoResult(data);
-    const status =
-      Number(data.resultCode) === 0 || result.code === "02"
-        ? "success"
-        : "failed";
-
-    const query =
-      `status=${encodeURIComponent(status)}` +
-      `&orderCode=${encodeURIComponent(data.orderId || "")}` +
-      `&txn=${encodeURIComponent(data.transId || "")}` +
-      `&message=${encodeURIComponent(result.message)}`;
-
-    return res.redirect(`${frontendUrl}/payment/result?${query}`);
+    const orderId = result.order?._id ? String(result.order._id) : "";
+    return res.redirect(
+      `${frontendUrl}/payment/processing?orderId=${encodeURIComponent(orderId)}`
+    );
   };
 
   return redirect().catch(() =>

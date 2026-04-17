@@ -40,23 +40,19 @@ const productController = {
       const {
         page = 1,
         limit = 10,
-        minPrice,
-        maxPrice,
         status,
         search,
         categoryId,
         categorySlug,
         categoryName,
+        sortPrice,
       } = req.query;
-
-      const query = {};
-
-      if (minPrice || maxPrice) {
-        query.price = {};
-        if (minPrice) query.price.$gte = Number(minPrice);
-        if (maxPrice) query.price.$lte = Number(maxPrice);
+      let sortOption = { createdAt: -1 };
+      if (sortPrice) {
+        sortOption = { price: sortPrice === "asc" ? 1 : -1 };
       }
 
+      const query = {};
       if (status) query.status = status;
 
       if (search) {
@@ -104,7 +100,7 @@ const productController = {
       const [data, total] = await Promise.all([
         productModel
           .find(query)
-          .sort({ createdAt: -1 })
+          .sort(sortOption)
           .skip(skip)
           .limit(Number(limit))
           .populate("categoryId"),

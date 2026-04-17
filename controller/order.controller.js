@@ -59,6 +59,7 @@ const orderController = {
         orderItems.push({
           productId: product._id,
           nameSnapshot: product.name,
+          skuSnapshot: product.sku,
           imageSnapshot: product.images?.[0] || "",
           size: item.size,
           color: item.color,
@@ -247,9 +248,21 @@ const orderController = {
   getMyOrders: async (req, res) => {
     try {
       const userId = req.user.id;
-      const { page = 1, limit = 10 } = req.query;
-      const orders = await orderModel.find({ userId }).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit);
-      const total = await orderModel.countDocuments({ userId });
+      const { page = 1, limit = 10, search } = req.query;
+      const query = { userId };
+      if (search) {
+        query.$or = [
+          { orderCode: { $regex: search, $options: "i" } },
+          { paymentMethod: { $regex: search, $options: "i" } },
+        ];
+      }
+      const orders = await orderModel
+        .find(query)
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .populate("discount.voucherId");
+      const total = await orderModel.countDocuments(query);
       const totalPages = Math.ceil(total / limit);
 
       return res.json({
@@ -267,15 +280,38 @@ const orderController = {
 
   getAllOrders: async (req, res) => {
     try {
-      const { page = 1, limit = 10 } = req.query;
-      const orders = await orderModel.find().populate("userId").sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit);
-      const total = await orderModel.countDocuments();
-      const totalPages = Math.ceil(total / limit);
+      const { page = 1, limit = 10, search } = req.query;
+      const query = {};
+
+      const searchText = typeof search === "string" ? search.trim() : "";
+
+      if (searchText) {
+        query.$or = [
+          { orderCode: { $regex: searchText, $options: "i" } },
+          { paymentMethod: { $regex: searchText, $options: "i" } },
+        ];
+      }
+
+      const skip = (Number(page) - 1) * Number(limit);
+
+      const orders = await orderModel
+        .find(query)
+        .populate("userId")
+        .populate("discount.voucherId")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(Number(limit));
+
+      const total = await orderModel.countDocuments(query);
+
+      const totalPages = Math.ceil(total / Number(limit));
+
       return res.json({
         orders,
         total,
         totalPages,
         page: Number(page),
+        limit: Number(limit),
       });
     } catch (err) {
       return res.status(500).json({
@@ -294,7 +330,16 @@ const orderController = {
         });
       }
 
-      return res.json(order);
+      let payment = null;
+
+      if (order.paymentMethod === "sepay") {
+        payment = createSePayPayload(order);
+      }
+
+      return res.json({
+        ...order.toObject(),
+        payment,
+      });
     } catch (err) {
       return res.status(500).json({
         message: err.message,
