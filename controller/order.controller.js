@@ -280,7 +280,7 @@ const orderController = {
 
   getAllOrders: async (req, res) => {
     try {
-      const { page = 1, limit = 10, search } = req.query;
+      const { page = 1, limit = 10, search, orderStatus } = req.query;
       const query = {};
 
       const searchText = typeof search === "string" ? search.trim() : "";
@@ -290,6 +290,10 @@ const orderController = {
           { orderCode: { $regex: searchText, $options: "i" } },
           { paymentMethod: { $regex: searchText, $options: "i" } },
         ];
+      }
+
+      if (orderStatus) {
+        query.orderStatus = orderStatus;
       }
 
       const skip = (Number(page) - 1) * Number(limit);
@@ -413,6 +417,50 @@ const orderController = {
 
       return res.json({
         message: "Order cancelled",
+        order,
+      });
+    } catch (err) {
+      return res.status(500).json({
+        message: err.message,
+      });
+    }
+  },
+
+  updateOrderStatus: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { orderStatus } = req.body;
+
+      const allowedStatuses = [
+        "pending",
+        "processing",
+        "shipping",
+        "completed",
+        "cancelled",
+      ];
+
+      if (!allowedStatuses.includes(orderStatus)) {
+        return res.status(400).json({ message: "Invalid order status" });
+      }
+
+      const order = await orderModel.findById(id);
+
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+
+      // (optional) chặn update nếu đã cancelled/completed
+      if (["completed", "cancelled"].includes(order.orderStatus)) {
+        return res.status(400).json({
+          message: "Cannot update finalized order",
+        });
+      }
+
+      order.orderStatus = orderStatus;
+      await order.save();
+
+      return res.json({
+        message: "Order status updated",
         order,
       });
     } catch (err) {
