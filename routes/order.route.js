@@ -26,5 +26,10 @@ orderRouter.put(
   userMiddleware.verifyToken,
   orderController.cancelOrder
 );
+orderRouter.put(
+  "/update-status/:id",
+  userMiddleware.verifyToken,
+  orderController.updateOrderStatus
+);
 
 export default orderRouter;

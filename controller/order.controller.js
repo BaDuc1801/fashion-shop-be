@@ -449,7 +449,6 @@ const orderController = {
         return res.status(404).json({ message: "Order not found" });
       }
 
-      // (optional) chặn update nếu đã cancelled/completed
       if (["completed", "cancelled"].includes(order.orderStatus)) {
         return res.status(400).json({
           message: "Cannot update finalized order",
