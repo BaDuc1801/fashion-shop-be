@@ -1,4 +1,5 @@
 import categoryModel from "../model/category.model.js";
+import orderModel from "../model/order.model.js";
 import productModel from "../model/product.model.js";
 import ratingModel from "../model/rating.model.js";
 import userModel from "../model/user.model.js";
@@ -244,6 +245,78 @@ const productController = {
       }
     } catch (err) {
       return res.status(500).json({ message: err.message });
+    }
+  },
+
+  getTopPurchasedProducts: async (req, res) => {
+    try {
+      const { limit = 10, page = 1 } = req.query;
+  
+      const limitNum = parseInt(limit || 10);
+      const pageNum = parseInt(page || 1);
+      const skip = (pageNum - 1) * limitNum;
+  
+      const basePipeline = [
+        { $match: { orderStatus: { $ne: "cancelled" } } },
+        { $unwind: "$items" },
+        {
+          $group: {
+            _id: "$items.productId",
+            totalSold: { $sum: "$items.quantity" },
+            totalRevenue: {
+              $sum: {
+                $multiply: ["$items.quantity", "$items.price"],
+              },
+            },
+          },
+        },
+        {
+          $lookup: {
+            from: "products",
+            localField: "_id",
+            foreignField: "_id",
+            as: "product",
+          },
+        },
+        { $unwind: "$product" },
+        {
+          $project: {
+            _id: 0,
+            productId: "$_id",
+            name: "$product.name",
+            sku: "$product.sku",
+            image: { $arrayElemAt: ["$product.images", 0] },
+            price: "$product.price",
+            totalSold: 1,
+            totalRevenue: 1,
+          },
+        },
+      ];
+  
+      const countResult = await orderModel.aggregate([
+        ...basePipeline,
+        { $count: "total" },
+      ]);
+  
+      const total = countResult[0]?.total || 0;
+      const totalPages = Math.ceil(total / limitNum);
+  
+      const data = await orderModel.aggregate([
+        ...basePipeline,
+        { $sort: { totalSold: -1 } },
+        { $skip: skip },
+        { $limit: limitNum },
+      ]);
+  
+      res.json({
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages,
+        data,
+      });
+    } catch (err) {
+      res.status(500).json({ message: err.message });
     }
   },
 };

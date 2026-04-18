@@ -14,6 +14,7 @@ import {
 } from "../services/payment/vnpay.service.js";
 import userModel from "../model/user.model.js";
 import { sendOrderSuccessEmail } from "../utils/user.util.js";
+import { incDailyStats } from "../utils/dashboard.util.js";
 
 const PAYMENT_EXPIRE_MINUTES = 15;
 
@@ -126,6 +127,11 @@ const processVNPayResult = async (params) => {
     await payment.save();
     await order.save();
     await finalizeReservedStock(order.items);
+    await incDailyStats({
+      date: order.paidAt,
+      revenue: order.total,
+      orders: 1,
+    });
     await appendPurchaseHistoryAndSendMail(order);
 
     return {
@@ -211,6 +217,11 @@ const processMoMoResult = async (data) => {
     await payment.save();
     await order.save();
     await finalizeReservedStock(order.items);
+    await incDailyStats({
+      date: order.paidAt,
+      revenue: order.total,
+      orders: 1,
+    });
     await appendPurchaseHistoryAndSendMail(order);
 
     return { ok: true, code: "00", message: "Success", order };
@@ -487,6 +498,11 @@ export const sepayWebhook = async (req, res) => {
     await order.save();
 
     await finalizeReservedStock(order.items);
+    await incDailyStats({
+      date: order.paidAt,
+      revenue: order.total,
+      orders: 1,
+    });
     await appendPurchaseHistoryAndSendMail(order);
 
     return res.json({ message: "OK" });

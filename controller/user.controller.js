@@ -13,6 +13,7 @@ import { sendOtpEmail } from "../utils/user.util.js";
 import { generateAccessToken } from "../utils/user.util.js";
 import { issueRefreshToken } from "../utils/user.util.js";
 import { setAuthCookies } from "../utils/user.util.js";
+import { incDailyStats } from "../utils/dashboard.util.js";
 
 const OTP_PURPOSES = {
   verify_register: {
@@ -67,6 +68,11 @@ const userController = {
         otp,
         "Enter the code below to verify your email."
       );
+
+      await incDailyStats({
+        date: new Date(),
+        users: 1,
+      });
 
       res.status(201).json({
         message:

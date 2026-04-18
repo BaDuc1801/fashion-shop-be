@@ -10,5 +10,6 @@ productRouter.get("/:id", productController.getProductById);
 productRouter.get("/sku/:sku",userMiddleware.optionalAuth,  productController.getProductBySku);
 productRouter.put("/:id", productController.updateProduct);
 productRouter.delete("/:id", productController.deleteProduct);
+productRouter.get("/admin/top-purchased", productController.getTopPurchasedProducts);
 
 export default productRouter;

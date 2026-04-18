@@ -12,6 +12,7 @@ import { createSePayPayload } from "../services/payment/sepay.service.js";
 import { updateUserCartAfterOrder } from "../services/user/user.service.js";
 import ratingModel from "../model/rating.model.js";
 import mongoose from "mongoose";
+import { incDailyStats } from "../utils/dashboard.util.js";
 
 const PAYMENT_EXPIRE_MINUTES = 15;
 
@@ -453,6 +454,11 @@ const orderController = {
 
       await order.save();
       await releaseReservedStock(order.items);
+
+      await incDailyStats({
+        date: order.createdAt,
+        cancelledOrders: 1,
+      });
 
       return res.json({
         message: "Order cancelled",

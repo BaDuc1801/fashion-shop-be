@@ -12,6 +12,7 @@ import voucherRouter from "./routes/voucher.route.js";
 import orderRouter from "./routes/order.route.js";
 import paymentRouter from "./routes/payment.route.js";
 import ratingRouter from "./routes/rating.route.js";
+import dashboardRouter from "./routes/dashboard.route.js";
 
 const mongoUri = process.env.MONGOCONNECT;
 if (!mongoUri) {
@@ -48,6 +49,7 @@ app.use("/api/vouchers", voucherRouter);
 app.use("/api/orders", orderRouter);
 app.use("/api/payments", paymentRouter);
 app.use("/api/ratings", ratingRouter);
+app.use("/api/dashboard", dashboardRouter);
 
 if (!process.env.VERCEL) {
   app.listen(8080, () => {
