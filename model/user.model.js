@@ -44,7 +44,7 @@ const UserSchema = new mongoose.Schema(
       select: false,
     },
 
-    addresses: [{ type: String }],
+    address: { type: String },
 
     role: {
       type: String,
