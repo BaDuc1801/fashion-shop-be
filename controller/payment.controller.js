@@ -58,7 +58,7 @@ const upsertVNPayProcessing = async (order) => {
       provider: "vnpay",
       amount: order.total,
       status: "processing",
-      txnRef: order.orderCode,
+      txnRef: order._id,
       expiresAt,
     },
     { upsert: true, new: true }
@@ -324,14 +324,25 @@ export const vnpayIPN = async (req, res) => {
 export const vnpayReturn = (req, res) => {
   const frontendUrl = process.env.FRONTEND_URL || "http://localhost:4201";
 
-  const orderId = req.query.vnp_TxnRef;
+  const redirect = async () => {
+    const params = req.query;
+    const isValid = verifyVNPayCallback(params);
 
-  if (!orderId) {
-    return res.redirect(`${frontendUrl}/payment/failed`);
-  }
+    if (!isValid) {
+      return res.redirect(
+        `${frontendUrl}/payment/failed?reason=invalid-signature`
+      );
+    }
 
-  return res.redirect(
-    `${frontendUrl}/payment/processing?orderId=${encodeURIComponent(orderId)}`
+    const result = await processVNPayResult(params);
+    const orderId = result.order?._id ? String(result.order._id) : "";
+    return res.redirect(
+      `${frontendUrl}/payment/processing?orderId=${encodeURIComponent(orderId)}`
+    );
+  };
+
+  return redirect().catch(() =>
+    res.redirect(`${frontendUrl}/payment/failed?reason=internal-error`)
   );
 };
 
