@@ -58,7 +58,7 @@ const upsertVNPayProcessing = async (order) => {
       provider: "vnpay",
       amount: order.total,
       status: "processing",
-      txnRef: order._id,
+      txnRef: order.orderCode,
       expiresAt,
     },
     { upsert: true, new: true }
@@ -305,33 +305,44 @@ export const createVNPayPayment = async (req, res) => {
 };
 
 export const vnpayIPN = async (req, res) => {
-  const params = req.query;
+  try {
+    const params = req.query;
 
-  const isValid = verifyVNPayCallback(params);
+    const isValid = verifyVNPayCallback(params);
 
-  if (!isValid) {
-    return res.json({ RspCode: "97" });
+    if (!isValid) {
+      return res.json({ RspCode: "97", Message: "Invalid signature" });
+    }
+
+    const result = await processVNPayResult(params);
+    return res.json({ RspCode: result.code, Message: result.message });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
   }
-
-  const result = await processVNPayResult(params);
-
-  return res.json({
-    RspCode: result.code,
-    Message: result.message,
-  });
 };
 
 export const vnpayReturn = (req, res) => {
   const frontendUrl = process.env.FRONTEND_URL || "http://localhost:4201";
 
-  const orderId = req.query.vnp_TxnRef;
+  const redirect = async () => {
+    const params = req.query;
+    const isValid = verifyVNPayCallback(params);
 
-  if (!orderId) {
-    return res.redirect(`${frontendUrl}/payment/failed`);
-  }
+    if (!isValid) {
+      return res.redirect(
+        `${frontendUrl}/payment/failed?reason=invalid-signature`
+      );
+    }
 
-  return res.redirect(
-    `${frontendUrl}/payment/processing?orderId=${encodeURIComponent(orderId)}`
+    const result = await processVNPayResult(params);
+    const orderId = result.order?._id ? String(result.order._id) : "";
+    return res.redirect(
+      `${frontendUrl}/payment/processing?orderId=${encodeURIComponent(orderId)}`
+    );
+  };
+
+  return redirect().catch(() =>
+    res.redirect(`${frontendUrl}/payment/failed?reason=internal-error`)
   );
 };
 
