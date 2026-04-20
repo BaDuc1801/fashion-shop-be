@@ -6,10 +6,11 @@ const categoryController = {
   // CREATE
   createCategory: async (req, res) => {
     try {
-      const { name, slug, image, status } = req.body;
+      const { name, nameEn, slug, image, status } = req.body;
 
       const category = await categoryModel.create({
         name,
+        nameEn,
         slug,
         image,
         status,
@@ -27,7 +28,7 @@ const categoryController = {
   // GET ALL
   getCategories: async (req, res) => {
     try {
-      const { page = 1, limit = 10, status, search } = req.query;
+      const { page = 1, limit = 10, status, search, lang = "en" } = req.query;
 
       const pageNumber = Number(page);
       const limitNumber = Number(limit);
@@ -39,10 +40,19 @@ const categoryController = {
       if (status) match.status = status;
 
       if (search) {
-        match.$or = [
-          { name: { $regex: search.trim(), $options: "i" } },
-          { slug: { $regex: search.trim(), $options: "i" } },
-        ];
+        const keyword = search.trim();
+
+        if (lang === "vi") {
+          match.$or = [
+            { name: { $regex: keyword, $options: "i" } },
+            { slug: { $regex: keyword, $options: "i" } },
+          ];
+        } else {
+          match.$or = [
+            { nameEn: { $regex: keyword, $options: "i" } },
+            { slug: { $regex: keyword, $options: "i" } },
+          ];
+        }
       }
 
       const [categories, total, counts] = await Promise.all([
@@ -114,7 +124,7 @@ const categoryController = {
   // GET ONE BY SLUG
   getCategoryBySlug: async (req, res) => {
     try {
-      const { slug } = req.params;
+      const { slug, lang = "en" } = req.params;
 
       const category = await categoryModel.findOne({ slug }).lean();
 
@@ -124,8 +134,14 @@ const categoryController = {
 
       const productCount = await getProductCountByCategory(category._id);
 
+      const data = category.toObject();
+
+      const name =
+        data.name_i18n?.get?.(lang) || data.name_i18n?.[lang] || data.name;
+
       res.json({
-        ...category,
+        ...data,
+        name,
         productCount,
       });
     } catch (err) {

@@ -8,6 +8,12 @@ const CategorySchema = new mongoose.Schema(
       trim: true,
     },
 
+    nameEn: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
     slug: {
       type: String,
       required: true,

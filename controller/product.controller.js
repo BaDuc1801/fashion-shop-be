@@ -49,7 +49,9 @@ const productController = {
         categoryId,
         categorySlug,
         categoryName,
+        categoryNameEn,
         sortPrice,
+        lang = "en",
       } = req.query;
       let sortOption = { createdAt: -1 };
       if (sortPrice) {
@@ -60,17 +62,27 @@ const productController = {
       if (status) query.status = status;
 
       if (search) {
-        query.$or = [
-          { name: { $regex: search.trim(), $options: "i" } },
-          { sku: { $regex: search.trim(), $options: "i" } },
-          { "categoryId.name": { $regex: search.trim(), $options: "i" } },
-        ];
+        const keyword = search.trim();
+
+        if (lang === "vi") {
+          query.$or = [
+            { name: { $regex: keyword, $options: "i" } },
+            { sku: { $regex: keyword, $options: "i" } },
+          ];
+        } else {
+          query.$or = [
+            { nameEn: { $regex: keyword, $options: "i" } },
+            { sku: { $regex: keyword, $options: "i" } },
+          ];
+        }
       }
 
       if (categoryId) query.categoryId = categoryId;
 
       if (categorySlug) {
-        const category = await categoryModel.findOne({ slug: categorySlug });
+        const category = await categoryModel.findOne({
+          slug: categorySlug,
+        });
 
         if (!category) {
           return res.json({
@@ -84,8 +96,18 @@ const productController = {
         query.categoryId = category._id;
       }
 
-      if (categoryName) {
-        const category = await categoryModel.findOne({ name: categoryName });
+      if (categoryName || categoryNameEn) {
+        const match = {};
+
+        if (categoryName) {
+          match.name = categoryName;
+        }
+
+        if (categoryNameEn) {
+          match.nameEn = categoryNameEn;
+        }
+
+        const category = await categoryModel.findOne(match);
 
         if (!category) {
           return res.json({
