@@ -1,5 +1,7 @@
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc.js";
+import dashboardModel from "../model/dashboard.model.js";
+
 dayjs.extend(utc);
 
 export const incDailyStats = async ({
@@ -9,10 +11,7 @@ export const incDailyStats = async ({
   cancelledOrders = 0,
   users = 0,
 }) => {
-  const day = dayjs(date)
-    .utc()
-    .startOf("day")
-    .toDate();
+  const day = dayjs(date).utc().startOf("day").toDate();
 
   await dashboardModel.updateOne(
     { date: day },
