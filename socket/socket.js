@@ -10,7 +10,7 @@ export const initSocket = (server) => {
       origin: [
         "http://localhost:4201",
         "http://localhost:4200",
-        import.meta.env.FRONTEND_URL,
+        process.env.FRONTEND_URL,
       ],
       credentials: true,
     },
