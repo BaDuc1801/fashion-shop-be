@@ -1,4 +1,3 @@
-import crypto from "crypto";
 import { vnpConfig } from "../../config/vnpay.js";
 import {
   buildQueryString,
@@ -60,7 +59,7 @@ export const createVNPayUrl = (order, req, expiresInMinutes = 15) => {
     vnp_Locale: "vn",
     vnp_CurrCode: "VND",
 
-    vnp_TxnRef: order._id.toString(),
+    vnp_TxnRef: order.orderCode,
     vnp_OrderInfo: `Payment order ${order.orderCode}`,
     vnp_OrderType: "other",
 
