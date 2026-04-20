@@ -33,15 +33,15 @@ const userMiddleware = {
   optionalAuth: (req, res, next) => {
     try {
       const token = req.cookies.access_token;
-  
+
       if (token) {
         const decoded = jwt.verify(token, process.env.SECRET_KEY);
         req.user = decoded;
       }
     } catch (err) {
-      console.log("JWT ERROR:", err.message); // 👈 thêm dòng này
+      console.log("JWT ERROR:", err.message);
     }
-  
+
     next();
   },
 };

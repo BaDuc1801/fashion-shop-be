@@ -15,6 +15,7 @@ import {
 import userModel from "../model/user.model.js";
 import { sendOrderSuccessEmail } from "../utils/user.util.js";
 import { incDailyStats } from "../utils/dashboard.util.js";
+import { createAndEmitNotification } from "../services/notification/notification.service.js";
 
 const PAYMENT_EXPIRE_MINUTES = 15;
 
@@ -27,7 +28,7 @@ const appendPurchaseHistoryAndSendMail = async (order) => {
           orderId: order._id,
           purchasedAt: order.paidAt || new Date(),
           totalAmount: order.total,
-          status: "completed",
+          status: "paid",
           items: order.items.map((i) => ({
             productName: i.nameSnapshot,
             quantity: i.quantity,
@@ -120,7 +121,7 @@ const processVNPayResult = async (params) => {
     payment.status = "success";
 
     order.paymentStatus = "paid";
-    order.orderStatus = "completed";
+    order.orderStatus = "paid";
     order.transactionId = params.vnp_TransactionNo;
     order.paidAt = new Date();
 
@@ -133,6 +134,16 @@ const processVNPayResult = async (params) => {
       orders: 1,
     });
     await appendPurchaseHistoryAndSendMail(order);
+    await createAndEmitNotification({
+      type: "order_paid",
+      title: "Order paid",
+      message: `Order ${order.orderCode} has been paid`,
+      data: {
+        orderId: order._id,
+        orderCode: order.orderCode,
+        total: order.total,
+      },
+    });
 
     return {
       ok: true,
@@ -210,7 +221,7 @@ const processMoMoResult = async (data) => {
   if (Number(data.resultCode) === 0) {
     payment.status = "success";
     order.paymentStatus = "paid";
-    order.orderStatus = "completed";
+    order.orderStatus = "paid";
     order.transactionId = data.transId ? String(data.transId) : null;
     order.paidAt = new Date();
 
@@ -223,6 +234,17 @@ const processMoMoResult = async (data) => {
       orders: 1,
     });
     await appendPurchaseHistoryAndSendMail(order);
+
+    await createAndEmitNotification({
+      type: "order_paid",
+      title: "Order paid",
+      message: `Order ${order.orderCode} has been paid`,
+      data: {
+        orderId: order._id,
+        orderCode: order.orderCode,
+        total: order.total,
+      },
+    });
 
     return { ok: true, code: "00", message: "Success", order };
   }
@@ -490,7 +512,7 @@ export const sepayWebhook = async (req, res) => {
     payment.gatewayResponse = data;
 
     order.paymentStatus = "paid";
-    order.orderStatus = "completed";
+    order.orderStatus = "paid";
     order.transactionId = transactionId;
     order.paidAt = new Date();
 
@@ -503,7 +525,19 @@ export const sepayWebhook = async (req, res) => {
       revenue: order.total,
       orders: 1,
     });
+    console.log("hi1");
     await appendPurchaseHistoryAndSendMail(order);
+    console.log("hi2");
+    await createAndEmitNotification({
+      type: "order_paid",
+      title: "Order paid",
+      message: `Order ${order.orderCode} has been paid`,
+      data: {
+        orderId: order._id,
+        orderCode: order.orderCode,
+        total: order.total,
+      },
+    });
 
     return res.json({ message: "OK" });
   } catch (err) {

@@ -13,6 +13,7 @@ import { updateUserCartAfterOrder } from "../services/user/user.service.js";
 import ratingModel from "../model/rating.model.js";
 import mongoose from "mongoose";
 import { incDailyStats } from "../utils/dashboard.util.js";
+import { createAndEmitNotification } from "../services/notification/notification.service.js";
 
 const PAYMENT_EXPIRE_MINUTES = 15;
 
@@ -237,6 +238,19 @@ const orderController = {
       }
 
       await updateUserCartAfterOrder(order);
+
+      await createAndEmitNotification({
+        type: "new_order_cod",
+        title: "New order COD",
+        message: `Order ${order.orderCode} (COD) has been created`,
+        data: {
+          orderId: order._id,
+          orderCode: order.orderCode,
+          total: order.total,
+          paymentMethod: "cod",
+        },
+      });
+
       return res.status(201).json({
         message: "Order created",
         order,
@@ -252,65 +266,62 @@ const orderController = {
     try {
       const userId = new mongoose.Types.ObjectId(req.user.id);
       const { page = 1, limit = 10, search } = req.query;
-  
+
       const pageNum = Number(page);
       const limitNum = Number(limit);
-  
+
       const query = { userId };
-  
+
       if (search) {
         query.$or = [
           { orderCode: { $regex: search, $options: "i" } },
           { paymentMethod: { $regex: search, $options: "i" } },
         ];
       }
-  
+
       const orders = await orderModel
         .find(query)
         .sort({ createdAt: -1 })
         .skip((pageNum - 1) * limitNum)
         .limit(limitNum)
         .populate("discount.voucherId");
-  
+
       const total = await orderModel.countDocuments(query);
       const totalPages = Math.ceil(total / limitNum);
-  
+
       const orderIds = orders.map((o) => o._id);
-  
+
       const ratings = await ratingModel.find({
         userId,
         orderId: { $in: orderIds },
       });
-  
+
       const ratedSet = new Set(
-        ratings.map(
-          (r) => `${r.productId.toString()}_${r.orderId.toString()}`
-        )
+        ratings.map((r) => `${r.productId.toString()}_${r.orderId.toString()}`)
       );
-  
+
       const updatedOrders = orders.map((order) => {
         const newItems = order.items.map((item) => {
           let reviewed = false;
-  
+
           if (order.orderStatus === "completed") {
             const key = `${item.productId.toString()}_${order._id.toString()}`;
             reviewed = ratedSet.has(key);
           }
-  
+
           return {
             ...item.toObject(),
             reviewed,
-            canReview:
-              order.orderStatus === "completed" && !reviewed,
+            canReview: order.orderStatus === "completed" && !reviewed,
           };
         });
-  
+
         return {
           ...order.toObject(),
           items: newItems,
         };
       });
-  
+
       return res.json({
         orders: updatedOrders,
         total,
@@ -474,7 +485,7 @@ const orderController = {
   updateOrderStatus: async (req, res) => {
     try {
       const { id } = req.params;
-      const { orderStatus } = req.body;
+      const { orderStatus, phoneNumber, address } = req.body;
 
       const allowedStatuses = [
         "pending",
@@ -482,6 +493,7 @@ const orderController = {
         "shipping",
         "completed",
         "cancelled",
+        "paid",
       ];
 
       if (!allowedStatuses.includes(orderStatus)) {
@@ -495,6 +507,12 @@ const orderController = {
       }
 
       order.orderStatus = orderStatus;
+      order.shippingAddress = {
+        name: order.shippingAddress.name,
+        email: order.shippingAddress.email,
+        phone: phoneNumber,
+        address: address,
+      };
       await order.save();
 
       return res.json({

@@ -286,7 +286,7 @@ const productController = {
 
   getTopPurchasedProducts: async (req, res) => {
     try {
-      const { limit = 10, page = 1 } = req.query;
+      const { limit = 10, page = 1, lang = "en" } = req.query;
 
       const limitNum = parseInt(limit || 10);
       const pageNum = parseInt(page || 1);
@@ -320,6 +320,7 @@ const productController = {
             _id: 0,
             productId: "$_id",
             name: "$product.name",
+            nameEn: "$product.nameEn",
             sku: "$product.sku",
             image: { $arrayElemAt: ["$product.images", 0] },
             price: "$product.price",

@@ -13,6 +13,9 @@ import orderRouter from "./routes/order.route.js";
 import paymentRouter from "./routes/payment.route.js";
 import ratingRouter from "./routes/rating.route.js";
 import dashboardRouter from "./routes/dashboard.route.js";
+import notificationRouter from "./routes/notification.route.js";
+import http from "http";
+import { initSocket } from "./socket/socket.js";
 
 const mongoUri = process.env.MONGOCONNECT;
 if (!mongoUri) {
@@ -50,9 +53,14 @@ app.use("/api/orders", orderRouter);
 app.use("/api/payments", paymentRouter);
 app.use("/api/ratings", ratingRouter);
 app.use("/api/dashboard", dashboardRouter);
+app.use("/api/notifications", notificationRouter);
+
+const server = http.createServer(app);
+
+initSocket(server);
 
 if (!process.env.VERCEL) {
-  app.listen(8080, () => {
+  server.listen(8080, () => {
     console.log("Server is running");
   });
 }
