@@ -7,7 +7,11 @@ let io;
 export const initSocket = (server) => {
   io = new Server(server, {
     cors: {
-      origin: ["http://localhost:4201", "http://localhost:4200"],
+      origin: [
+        "http://localhost:4201",
+        "http://localhost:4200",
+        import.meta.env.FRONTEND_URL,
+      ],
       credentials: true,
     },
   });
