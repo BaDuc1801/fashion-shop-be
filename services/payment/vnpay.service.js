@@ -60,7 +60,7 @@ export const createVNPayUrl = (order, req, expiresInMinutes = 15) => {
     vnp_Locale: "vn",
     vnp_CurrCode: "VND",
 
-    vnp_TxnRef: order.orderCode,
+    vnp_TxnRef: order._id.toString(),
     vnp_OrderInfo: `Payment order ${order.orderCode}`,
     vnp_OrderType: "other",
 
