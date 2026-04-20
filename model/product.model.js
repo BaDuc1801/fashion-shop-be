@@ -5,8 +5,10 @@ import { SizeSchema } from "./schemas/product.schema.js";
 const ProductSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
+    nameEn: { type: String, required: true },
 
     description: { type: String, required: true },
+    descriptionEn: { type: String, required: true },
 
     sku: {
       type: String,

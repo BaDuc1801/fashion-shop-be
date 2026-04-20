@@ -17,9 +17,11 @@ const productController = {
 
       const product = await productModel.create({
         name: body.name,
+        nameEn: body.nameEn,
         sku: body.sku,
         price: body.price,
         description: body.description,
+        descriptionEn: body.descriptionEn,
         status: body.status || "active",
         images: body.images || [],
         sizeVariants: body.sizeVariants || [],
@@ -138,21 +140,21 @@ const productController = {
   getProductBySku: async (req, res) => {
     try {
       const { sku } = req.params;
-      const {limit = 10, page = 1} = req.query;
+      const { limit = 10, page = 1, lang = "en" } = req.query;
 
       const limitNum = Number(limit);
       const pageNum = Number(page);
-    const skip = (pageNum - 1) * limitNum;
-  
+      const skip = (pageNum - 1) * limitNum;
+
       const [product, user] = await Promise.all([
         productModel.findOne({ sku }).populate("categoryId"),
         req.user ? userModel.findById(req.user.id) : null,
       ]);
-  
+
       if (!product) {
         return res.status(404).json({ message: "Not found" });
       }
-  
+
       const [reviews, stats] = await Promise.all([
         ratingModel
           .find({
@@ -165,19 +167,31 @@ const productController = {
           .skip(skip),
         ratingModel.calcAverageRating(product._id),
       ]);
-  
+
       let inWishlist = false;
-  
+
       if (user?.wishlist?.length) {
         const wishlistSet = new Set(user.wishlist.map((id) => id.toString()));
         inWishlist = wishlistSet.has(product._id.toString());
       }
-  
-      res.json({
+
+      const data = product.toObject();
+
+      const name =
+        data.name_i18n?.get?.(lang) || data.name_i18n?.[lang] || data.name;
+
+      const description =
+        data.description_i18n?.get?.(lang) ||
+        data.description_i18n?.[lang] ||
+        data.description;
+
+      return res.json({
         ...product.toObject(),
         inWishlist,
-          reviews,
+        reviews,
         ratingStats: stats,
+        name,
+        description,
       });
     } catch (err) {
       res.status(500).json({ message: err.message });
@@ -251,11 +265,11 @@ const productController = {
   getTopPurchasedProducts: async (req, res) => {
     try {
       const { limit = 10, page = 1 } = req.query;
-  
+
       const limitNum = parseInt(limit || 10);
       const pageNum = parseInt(page || 1);
       const skip = (pageNum - 1) * limitNum;
-  
+
       const basePipeline = [
         { $match: { orderStatus: { $ne: "cancelled" } } },
         { $unwind: "$items" },
@@ -292,22 +306,22 @@ const productController = {
           },
         },
       ];
-  
+
       const countResult = await orderModel.aggregate([
         ...basePipeline,
         { $count: "total" },
       ]);
-  
+
       const total = countResult[0]?.total || 0;
       const totalPages = Math.ceil(total / limitNum);
-  
+
       const data = await orderModel.aggregate([
         ...basePipeline,
         { $sort: { totalSold: -1 } },
         { $skip: skip },
         { $limit: limitNum },
       ]);
-  
+
       res.json({
         page: pageNum,
         limit: limitNum,
