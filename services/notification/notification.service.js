@@ -1,13 +1,23 @@
 import notificationModel from "../../model/notification.model.js";
-import { getIO } from "../../socket/socket.js";
+import axios from "axios";
 
 export const createAndEmitNotification = async (payload) => {
   try {
     const notification = await notificationModel.create(payload);
 
-    const io = getIO();
-
-    io.to("admins").emit("new_notification", notification);
+    await axios.post(
+      `https://fashion-shop-socket.onrender.com/api/emit`,
+      {
+        event: "new_notification",
+        room: "admins",
+        data: notification,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.SECRET_KEY}`,
+        },
+      }
+    );
 
     return notification;
   } catch (error) {

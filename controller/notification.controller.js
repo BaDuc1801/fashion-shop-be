@@ -1,5 +1,5 @@
+import axios from "axios";
 import notificationModel from "../model/notification.model.js";
-import { getIO } from "../socket/socket.js";
 
 const notificationController = {
   getNotifications: async (req, res) => {
@@ -76,11 +76,19 @@ const notificationController = {
       }
     );
 
-    const io = getIO();
-
-    io.to(`admin_${userId}`).emit("notification_read", { id });
-
-    res.json({ success: true });
+    await axios.post(
+      `https://fashion-shop-socket.onrender.com/api/emit`,
+      {
+        event: "notification_read_all",
+        room: `admin_${userId}`,
+        data: null,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.SECRET_KEY}`,
+        },
+      }
+    );
   },
 
   markAllAsRead: async (req, res) => {
@@ -110,8 +118,19 @@ const notificationController = {
       await notificationModel.bulkWrite(bulk);
     }
 
-    const io = getIO();
-    io.to(`admin_${userId}`).emit("notification_read_all");
+    await axios.post(
+      `https://fashion-shop-socket.onrender.com/api/emit`,
+      {
+        event: "notification_read_all",
+        room: `admin_${userId}`,
+        data: null,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.SECRET_KEY}`,
+        },
+      }
+    );
 
     res.json({ success: true });
   },
