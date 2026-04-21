@@ -8,14 +8,28 @@ const notificationController = {
     const limit = Number(req.query.limit || 10);
     const skip = (page - 1) * limit;
 
+    const lang = req.query.lang || "vi";
+    const search = req.query.search?.trim();
+
+    const filter = {
+      target: "admin",
+    };
+
+    if (search) {
+      filter.$or = [
+        { [`title.${lang}`]: { $regex: search, $options: "i" } },
+        { [`message.${lang}`]: { $regex: search, $options: "i" } },
+      ];
+    }
+
     const [list, total] = await Promise.all([
       notificationModel
-        .find({ target: "admin" })
+        .find(filter)
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit),
 
-      notificationModel.countDocuments({ target: "admin" }),
+      notificationModel.countDocuments(filter),
     ]);
 
     const data = list.map((n) => {
@@ -31,7 +45,6 @@ const notificationController = {
       totalPages: Math.ceil(total / limit),
     });
   },
-
   getUnreadNotificationsCount: async (req, res) => {
     const userId = req.user.id;
 
@@ -98,18 +111,30 @@ const notificationController = {
       const limit = Number(req.query.limit || 10);
       const skip = (page - 1) * limit;
 
+      const search = req.query.search?.trim();
+
+      const filter = {
+        userId,
+        target: "customer",
+      };
+
+      if (search) {
+        filter.$or = [
+          { [`title.${lang}`]: { $regex: search, $options: "i" } },
+          { [`message.${lang}`]: { $regex: search, $options: "i" } },
+        ];
+      }
       const [list, total] = await Promise.all([
         notificationModel
-          .find({ userId, target: "customer" })
+          .find(filter)
           .sort({ createdAt: -1 })
           .skip(skip)
           .limit(limit),
 
-        notificationModel.countDocuments({ userId, target: "customer" }),
+        notificationModel.countDocuments(filter),
       ]);
 
       const data = list.map((n) => {
-        console.log(n.readBy);
         const isRead = n.readBy.some((r) => r.userId?.equals?.(userId));
 
         return { ...n.toObject(), isRead };

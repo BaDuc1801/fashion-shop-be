@@ -134,7 +134,7 @@ const userController = {
 
       res.cookie("access_token", access, {
         ...cookieBase(),
-        maxAge: 15 * 60 * 1000,
+        maxAge: 30 * 60 * 1000,
       });
       res.cookie("refresh_token", refreshVal, {
         ...cookieBase(),
@@ -557,17 +557,17 @@ const userController = {
   addToWishlist: async (req, res) => {
     try {
       const { productId } = req.body;
-  
+
       if (!productId) {
         return res.status(400).json({
           message: "productId is required",
         });
       }
-  
+
       await userModel.findByIdAndUpdate(req.user.id, {
-        $addToSet: { wishlist: productId }, 
+        $addToSet: { wishlist: productId },
       });
-  
+
       res.json({ message: "Added to wishlist" });
     } catch (err) {
       res.status(500).json({ message: err.message });
@@ -577,11 +577,11 @@ const userController = {
   removeFromWishlist: async (req, res) => {
     try {
       const { productId } = req.params;
-  
+
       await userModel.findByIdAndUpdate(req.user.id, {
         $pull: { wishlist: productId },
       });
-  
+
       res.json({ message: "Removed from wishlist" });
     } catch (err) {
       res.status(500).json({ message: err.message });
@@ -591,30 +591,30 @@ const userController = {
   addToCart: async (req, res) => {
     try {
       const { productId, size, color, quantity = 1 } = req.body;
-  
+
       if (!productId || !size || !color) {
         return res.status(400).json({
           message: "productId, size, color are required",
         });
       }
-  
+
       const user = await userModel.findById(req.user.id);
-  
+
       const existing = user.cart.find(
         (item) =>
           item.product.toString() === productId &&
           item.size === size &&
           item.color === color
       );
-  
+
       if (existing) {
         existing.quantity += quantity;
       } else {
         user.cart.push({ product: productId, size, color, quantity });
       }
-  
+
       await user.save();
-  
+
       res.json({
         message: "Cart updated",
         cart: user.cart,
@@ -627,26 +627,26 @@ const userController = {
   updateCartItem: async (req, res) => {
     try {
       const { productId, size, color, quantity } = req.body;
-  
+
       if (!productId || !size || !color || quantity == null) {
         return res.status(400).json({
           message: "productId, size, color, quantity are required",
         });
       }
-  
+
       const user = await userModel.findById(req.user.id);
-  
+
       const item = user.cart.find(
         (i) =>
           i.product.toString() === productId &&
           i.size === size &&
           i.color === color
       );
-  
+
       if (!item) {
         return res.status(404).json({ message: "Item not found in cart" });
       }
-  
+
       if (quantity <= 0) {
         user.cart = user.cart.filter(
           (i) =>
@@ -659,9 +659,9 @@ const userController = {
       } else {
         item.quantity = quantity;
       }
-  
+
       await user.save();
-  
+
       res.json({
         message: "Cart updated",
         cart: user.cart,
@@ -675,9 +675,9 @@ const userController = {
     try {
       const { size, color } = req.body;
       const { productId } = req.params;
-  
+
       const user = await userModel.findById(req.user.id);
-  
+
       user.cart = user.cart.filter(
         (item) =>
           !(
@@ -686,9 +686,9 @@ const userController = {
             item.color === color
           )
       );
-  
+
       await user.save();
-  
+
       res.json({
         message: "Removed from cart",
         cart: user.cart,
@@ -706,16 +706,14 @@ const userController = {
       res.status(500).json({ message: err.message });
     }
   },
-  
+
   getCart: async (req, res) => {
     try {
-      const user = await userModel
-        .findById(req.user.id)
-        .populate({
-          path: "cart.product",
-          select: "name price images sku", 
-        });
-  
+      const user = await userModel.findById(req.user.id).populate({
+        path: "cart.product",
+        select: "name price images sku",
+      });
+
       res.json(user.cart);
     } catch (err) {
       res.status(500).json({ message: err.message });

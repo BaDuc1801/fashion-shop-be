@@ -137,8 +137,14 @@ const processVNPayResult = async (params) => {
     await createAndEmitNotification({
       target: "admin",
       type: "order_paid",
-      title: "Order paid",
-      message: `Order ${order.orderCode} has been paid`,
+      title: {
+        vi: "Đơn hàng đã thanh toán",
+        en: "Order paid",
+      },
+      message: {
+        vi: `Đơn hàng ${order.orderCode} đã thanh toán`,
+        en: `Order ${order.orderCode} has been paid`,
+      },
       data: {
         orderId: order._id,
         orderCode: order.orderCode,
@@ -239,8 +245,14 @@ const processMoMoResult = async (data) => {
     await createAndEmitNotification({
       target: "admin",
       type: "order_paid",
-      title: "Order paid",
-      message: `Order ${order.orderCode} has been paid`,
+      title: {
+        vi: "Đơn hàng đã thanh toán",
+        en: "Order paid",
+      },
+      message: {
+        vi: `Đơn hàng ${order.orderCode} đã thanh toán`,
+        en: `Order ${order.orderCode} has been paid`,
+      },
       data: {
         orderId: order._id,
         orderCode: order.orderCode,
@@ -533,8 +545,14 @@ export const sepayWebhook = async (req, res) => {
     await createAndEmitNotification({
       target: "admin",
       type: "order_paid",
-      title: "Order paid",
-      message: `Order ${order.orderCode} has been paid`,
+      title: {
+        vi: "Đơn hàng đã thanh toán",
+        en: "Order paid",
+      },
+      message: {
+        vi: `Đơn hàng ${order.orderCode} đã thanh toán`,
+        en: `Order ${order.orderCode} has been paid`,
+      },
       data: {
         orderId: order._id,
         orderCode: order.orderCode,

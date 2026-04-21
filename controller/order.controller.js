@@ -244,8 +244,14 @@ const orderController = {
       await createAndEmitNotification({
         target: "admin",
         type: "new_order_cod",
-        title: "New order COD",
-        message: `Order ${order.orderCode} (COD) has been created`,
+        title: {
+          vi: "Đơn hàng mới COD",
+          en: "New COD order",
+        },
+        message: {
+          vi: `Đơn hàng ${order.orderCode} (COD) đã được tạo`,
+          en: `Order ${order.orderCode} (COD) has been created`,
+        },
         data: {
           orderId: order._id,
           orderCode: order.orderCode,
@@ -520,8 +526,14 @@ const orderController = {
 
       const notification = await notificationModel.create({
         type: "order_status",
-        title: "Order update",
-        message: `Order ${order.orderCode} is now ${orderStatus}`,
+        title: {
+          vi: "Cập nhật đơn hàng",
+          en: "Order update",
+        },
+        message: {
+          vi: `Đơn hàng ${order.orderCode} đã được cập nhật thành ${orderStatus}`,
+          en: `Order ${order.orderCode} is now ${orderStatus}`,
+        },
         data: {
           orderId: order._id,
           orderCode: order.orderCode,

@@ -3,8 +3,14 @@ import mongoose from "mongoose";
 const notificationSchema = new mongoose.Schema(
   {
     type: String,
-    title: String,
-    message: String,
+    title: {
+      vi: String,
+      en: String,
+    },
+    message: {
+      vi: String,
+      en: String,
+    },
     data: Object,
     target: String,
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "user" },

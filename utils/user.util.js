@@ -45,7 +45,7 @@ export const setAuthCookies = async (res, user) => {
   const refreshVal = await issueRefreshToken(user._id);
   res.cookie("access_token", access, {
     ...cookieBase(),
-    maxAge: 15 * 60 * 1000,
+    maxAge: 30 * 60 * 1000,
   });
   res.cookie("refresh_token", refreshVal, {
     ...cookieBase(),
