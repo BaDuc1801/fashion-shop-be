@@ -14,6 +14,10 @@ import paymentRouter from "./routes/payment.route.js";
 import ratingRouter from "./routes/rating.route.js";
 import dashboardRouter from "./routes/dashboard.route.js";
 import notificationRouter from "./routes/notification.route.js";
+import passport from "passport";
+import "./config/passport.js";
+import { Strategy as GoogleStrategy } from "passport-google-oauth20";
+import userController from "./controller/user.controller.js";
 
 const mongoUri = process.env.MONGOCONNECT;
 if (!mongoUri) {
@@ -35,9 +39,24 @@ const corsOptions = {
 };
 
 const app = express();
+
+app.use(passport.initialize());
 app.use(express.json());
 app.use(cors(corsOptions));
 app.use(cookieParser());
+
+app.get(
+  "/auth/google",
+  passport.authenticate("google", {
+    scope: ["profile", "email"],
+  })
+);
+
+app.get(
+  "/auth/google/callback",
+  passport.authenticate("google", { session: false }),
+  userController.googleCallback
+);
 
 app.get("/", (req, res) => {
   res.status(200).json({ message: "hello!" });

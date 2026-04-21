@@ -14,6 +14,7 @@ import { generateAccessToken } from "../utils/user.util.js";
 import { issueRefreshToken } from "../utils/user.util.js";
 import { setAuthCookies } from "../utils/user.util.js";
 import { incDailyStats } from "../utils/dashboard.util.js";
+import jwt from "jsonwebtoken";
 
 const OTP_PURPOSES = {
   verify_register: {
@@ -717,6 +718,41 @@ const userController = {
       res.json(user.cart);
     } catch (err) {
       res.status(500).json({ message: err.message });
+    }
+  },
+
+  googleCallback: async (req, res) => {
+    try {
+      const profile = req.user;
+
+      if (!profile?.email) {
+        return res.status(400).json({ message: "Google email missing" });
+      }
+
+      let user = await userModel.findOne({ email: profile.email });
+
+      if (!user) {
+        user = await userModel.create({
+          name: profile.name,
+          email: profile.email,
+          avatar: profile.avatar || "",
+          provider: "google",
+          providerId: profile.id,
+          isVerified: true,
+          status: "active",
+          role: "customer",
+        });
+      }
+
+      const token = jwt.sign({ id: user._id }, process.env.SECRET_KEY, {
+        expiresIn: "7d",
+      });
+
+      return res.redirect(
+        `${process.env.FRONTEND_URL}/login-success?token=${token}`
+      );
+    } catch (err) {
+      return res.status(500).json({ message: err.message });
     }
   },
 };
