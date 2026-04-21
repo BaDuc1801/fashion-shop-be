@@ -16,7 +16,6 @@ import dashboardRouter from "./routes/dashboard.route.js";
 import notificationRouter from "./routes/notification.route.js";
 import passport from "passport";
 import "./config/passport.js";
-import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import userController from "./controller/user.controller.js";
 
 const mongoUri = process.env.MONGOCONNECT;
@@ -49,6 +48,7 @@ app.get(
   "/auth/google",
   passport.authenticate("google", {
     scope: ["profile", "email"],
+    prompt: "select_account",
   })
 );
 

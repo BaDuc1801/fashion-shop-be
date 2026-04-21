@@ -117,7 +117,7 @@ const UserSchema = new mongoose.Schema(
 
         status: {
           type: String,
-          enum: ["completed", "cancelled", "shipping", "delivered", "pending"],
+          enum: ["completed", "cancelled", "shipping", "delivered", "pending", "paid"],
           required: true,
         },
 

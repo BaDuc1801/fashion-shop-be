@@ -724,13 +724,13 @@ const userController = {
   googleCallback: async (req, res) => {
     try {
       const profile = req.user;
-
+  
       if (!profile?.email) {
         return res.status(400).json({ message: "Google email missing" });
       }
-
+  
       let user = await userModel.findOne({ email: profile.email });
-
+  
       if (!user) {
         user = await userModel.create({
           name: profile.name,
@@ -743,13 +743,10 @@ const userController = {
           role: "customer",
         });
       }
-
-      const token = jwt.sign({ id: user._id }, process.env.SECRET_KEY, {
-        expiresIn: "7d",
-      });
-
+        await setAuthCookies(res, user);
+  
       return res.redirect(
-        `${process.env.FRONTEND_URL}/login-success?token=${token}`
+        `${process.env.FRONTEND_URL}/login-success`
       );
     } catch (err) {
       return res.status(500).json({ message: err.message });
