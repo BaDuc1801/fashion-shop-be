@@ -14,6 +14,8 @@ import ratingModel from "../model/rating.model.js";
 import mongoose from "mongoose";
 import { incDailyStats } from "../utils/dashboard.util.js";
 import { createAndEmitNotification } from "../services/notification/notification.service.js";
+import notificationModel from "../model/notification.model.js";
+import axios from "axios";
 
 const PAYMENT_EXPIRE_MINUTES = 15;
 
@@ -240,6 +242,7 @@ const orderController = {
       await updateUserCartAfterOrder(order);
 
       await createAndEmitNotification({
+        target: "admin",
         type: "new_order_cod",
         title: "New order COD",
         message: `Order ${order.orderCode} (COD) has been created`,
@@ -514,6 +517,28 @@ const orderController = {
         address: address,
       };
       await order.save();
+
+      const notification = await notificationModel.create({
+        type: "order_status",
+        title: "Order update",
+        message: `Order ${order.orderCode} is now ${orderStatus}`,
+        data: {
+          orderId: order._id,
+          orderCode: order.orderCode,
+        },
+        target: "customer",
+        userId: order.userId,
+      });
+
+      try {
+        await axios.post(`${process.env.SOCKET_URL}/api/emit`, {
+          event: "new_notification",
+          room: `customer_${order.userId}`,
+          data: notification,
+        });
+      } catch (err) {
+        console.error("Emit API error:", err.message);
+      }
 
       return res.json({
         message: "Order status updated",

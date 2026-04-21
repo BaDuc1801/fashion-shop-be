@@ -6,7 +6,7 @@ export const createAndEmitNotification = async (payload) => {
     const notification = await notificationModel.create(payload);
 
     await axios.post(
-      `https://fashion-shop-socket.onrender.com/api/emit`,
+      `${process.env.SOCKET_URL}/api/emit`,
       {
         event: "new_notification",
         room: "admins",

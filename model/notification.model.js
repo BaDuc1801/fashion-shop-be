@@ -6,7 +6,8 @@ const notificationSchema = new mongoose.Schema(
     title: String,
     message: String,
     data: Object,
-
+    target: String,
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: "user" },
     readBy: [
       {
         userId: { type: mongoose.Schema.Types.ObjectId, ref: "user" },

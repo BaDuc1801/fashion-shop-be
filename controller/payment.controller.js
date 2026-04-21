@@ -135,6 +135,7 @@ const processVNPayResult = async (params) => {
     });
     await appendPurchaseHistoryAndSendMail(order);
     await createAndEmitNotification({
+      target: "admin",
       type: "order_paid",
       title: "Order paid",
       message: `Order ${order.orderCode} has been paid`,
@@ -236,6 +237,7 @@ const processMoMoResult = async (data) => {
     await appendPurchaseHistoryAndSendMail(order);
 
     await createAndEmitNotification({
+      target: "admin",
       type: "order_paid",
       title: "Order paid",
       message: `Order ${order.orderCode} has been paid`,
@@ -525,10 +527,11 @@ export const sepayWebhook = async (req, res) => {
       revenue: order.total,
       orders: 1,
     });
-    console.log("hi1");
+
     await appendPurchaseHistoryAndSendMail(order);
-    console.log("hi2");
+
     await createAndEmitNotification({
+      target: "admin",
       type: "order_paid",
       title: "Order paid",
       message: `Order ${order.orderCode} has been paid`,

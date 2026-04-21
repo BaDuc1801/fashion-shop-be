@@ -26,5 +26,25 @@ notificationRouter.post(
   userMiddleware.verifyToken,
   notificationController.markAllAsRead
 );
+notificationRouter.get(
+  "/customer",
+  userMiddleware.verifyToken,
+  notificationController.getMyNotifications
+);
+notificationRouter.get(
+  "/customer/unread-count",
+  userMiddleware.verifyToken,
+  notificationController.getMyUnreadCount
+);
+notificationRouter.patch(
+  "/customer/:id/read",
+  userMiddleware.verifyToken,
+  notificationController.markMyNotificationAsRead
+);
+notificationRouter.patch(
+  "/customer/read-all",
+  userMiddleware.verifyToken,
+  notificationController.markAllMyNotificationsAsRead
+);
 
 export default notificationRouter;
