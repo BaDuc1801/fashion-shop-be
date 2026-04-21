@@ -14,9 +14,7 @@ import paymentRouter from "./routes/payment.route.js";
 import ratingRouter from "./routes/rating.route.js";
 import dashboardRouter from "./routes/dashboard.route.js";
 import notificationRouter from "./routes/notification.route.js";
-import passport from "passport";
-import "./config/passport.js";
-import userController from "./controller/user.controller.js";
+import aiRoute from "./routes/ai.route.js";
 
 const mongoUri = process.env.MONGOCONNECT;
 if (!mongoUri) {
@@ -38,25 +36,9 @@ const corsOptions = {
 };
 
 const app = express();
-
-app.use(passport.initialize());
 app.use(express.json());
 app.use(cors(corsOptions));
 app.use(cookieParser());
-
-app.get(
-  "/auth/google",
-  passport.authenticate("google", {
-    scope: ["profile", "email"],
-    prompt: "select_account",
-  })
-);
-
-app.get(
-  "/auth/google/callback",
-  passport.authenticate("google", { session: false }),
-  userController.googleCallback
-);
 
 app.get("/", (req, res) => {
   res.status(200).json({ message: "hello!" });
@@ -71,6 +53,7 @@ app.use("/api/payments", paymentRouter);
 app.use("/api/ratings", ratingRouter);
 app.use("/api/dashboard", dashboardRouter);
 app.use("/api/notifications", notificationRouter);
+app.use("/api/ai", aiRoute);
 
 if (!process.env.VERCEL) {
   app.listen(8080, () => {

@@ -3,6 +3,8 @@ import orderModel from "../model/order.model.js";
 import productModel from "../model/product.model.js";
 import ratingModel from "../model/rating.model.js";
 import userModel from "../model/user.model.js";
+import userBehaviorModel from "../model/userBehavior.model.js";
+import { trackUserEvent } from "../services/ai/aiPersonalization.service.js";
 
 const productController = {
   // CREATE
@@ -156,6 +158,20 @@ const productController = {
     } catch (err) {
       res.status(500).json({ message: err.message });
     }
+
+    const userId = req.user?._id || req.user?.id;
+     if (userId) {
+       trackUserEvent(userBehaviorModel, userId, {
+         type:         "view",
+         productId:    product._id,
+         productName:  product.name,
+         categoryId:   product.categoryId?._id,
+         categoryName: product.categoryId?.name,
+         price:        product.price,
+       }).catch(() => {});
+     }
+
+     return res.json(product);
   },
 
   // GET ONE BY SKU
