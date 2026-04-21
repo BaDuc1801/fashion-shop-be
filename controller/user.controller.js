@@ -752,6 +752,37 @@ const userController = {
       return res.status(500).json({ message: err.message });
     }
   },
+
+  facebookCallback: async (req, res) => {
+    try {
+      const profile = req.user;
+  
+      if (!profile?.email) {
+        return res.status(400).json({ message: "Facebook email missing" });
+      }
+  
+      let user = await userModel.findOne({ email: profile.email });
+  
+      if (!user) {
+        user = await userModel.create({
+          name: profile.name,
+          email: profile.email,
+          avatar: profile.avatar || "",
+          provider: "facebook",
+          providerId: profile.id,
+          isVerified: true,
+          status: "active",
+          role: "customer",
+        });
+      }
+  
+      await setAuthCookies(res, user);
+  
+      return res.redirect(`${process.env.FRONTEND_URL}/login-success`);
+    } catch (err) {
+      return res.status(500).json({ message: err.message });
+    }
+  },
 };
 
 export default userController;

@@ -58,6 +58,19 @@ app.get(
   userController.googleCallback
 );
 
+app.get(
+  "/auth/facebook",
+  passport.authenticate("facebook", {
+    scope: ["email"],
+  })
+);
+
+app.get(
+  "/auth/facebook/callback",
+  passport.authenticate("facebook", { session: false }),
+  userController.facebookCallback
+);
+
 app.get("/", (req, res) => {
   res.status(200).json({ message: "hello!" });
 });
