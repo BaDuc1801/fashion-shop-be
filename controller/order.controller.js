@@ -13,6 +13,8 @@ import { createMoMoUrl } from "../services/payment/momo.service.js";
 import { createSePayPayload } from "../services/payment/sepay.service.js";
 import { updateUserCartAfterOrder } from "../services/user/user.service.js";
 import ratingModel from "../model/rating.model.js";
+import { trackUserEvent } from "../services/ai/aiPersonalization.service.js";
+import userBehaviorModel from "../model/userBehavior.model.js";
 import mongoose from "mongoose";
 import { incDailyStats } from "../utils/dashboard.util.js";
 import { createAndEmitNotification } from "../services/notification/notification.service.js";
@@ -20,6 +22,17 @@ import notificationModel from "../model/notification.model.js";
 import axios from "axios";
 
 const PAYMENT_EXPIRE_MINUTES = 15;
+
+function trackOrderItems(userId, orderItems) {
+  for (const item of orderItems) {
+    trackUserEvent(userBehaviorModel, userId, {
+      type: "purchase",
+      productId: item.productId,
+      productName: item.nameSnapshot, // field đúng theo orderItems schema
+      price: item.price,
+    }).catch(() => {});
+  }
+}
 
 const orderController = {
   createOrder: async (req, res) => {
@@ -227,6 +240,8 @@ const orderController = {
       }
 
       await updateUserCartAfterOrder(order);
+
+      trackOrderItems(userId, order.items);
 
       await createAndEmitNotification({
         target: "admin",
@@ -512,6 +527,10 @@ const orderController = {
         address: address,
       };
       await order.save();
+
+      if (orderStatus === "completed") {
+        trackOrderItems(String(order.userId), order.items);
+      }
 
       if (
         order.paymentMethod === "cod" &&
