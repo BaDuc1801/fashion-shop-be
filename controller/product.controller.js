@@ -23,8 +23,7 @@ const productController = {
         description: body.description,
         descriptionEn: body.descriptionEn,
         status: body.status || "active",
-        images: body.images || [],
-        sizeVariants: body.sizeVariants || [],
+        variants: body.variants || [],
         categoryId: body.categoryId,
       });
 
@@ -259,28 +258,24 @@ const productController = {
   },
 
   decreaseStock: async (items) => {
-    try {
-      for (const item of items) {
-        const product = await productModel.findById(item.productId);
-
-        if (!product) continue;
-
-        const sizeIndex = product.sizeVariants.findIndex(
-          (s) => s.size === item.size
-        );
-
-        if (sizeIndex === -1) continue;
-
-        product.sizeVariants[sizeIndex].stock -= item.quantity;
-
-        if (product.sizeVariants[sizeIndex].stock < 0) {
-          product.sizeVariants[sizeIndex].stock = 0;
+    for (const item of items) {
+      await productModel.updateOne(
+        {
+          _id: item.productId,
+          "variants.color": item.color,
+          "variants.skus.size": item.size,
+          "variants.skus.quantity": { $gte: item.quantity },
+        },
+        {
+          $inc: {
+            "variants.$[v].skus.$[s].quantity": -item.quantity,
+            "variants.$[v].skus.$[s].sold": item.quantity,
+          },
+        },
+        {
+          arrayFilters: [{ "v.color": item.color }, { "s.size": item.size }],
         }
-
-        await product.save();
-      }
-    } catch (err) {
-      return res.status(500).json({ message: err.message });
+      );
     }
   },
 
@@ -322,7 +317,16 @@ const productController = {
             name: "$product.name",
             nameEn: "$product.nameEn",
             sku: "$product.sku",
-            image: { $arrayElemAt: ["$product.images", 0] },
+            image: {
+              $let: {
+                vars: {
+                  firstVariant: { $arrayElemAt: ["$product.variants", 0] },
+                },
+                in: {
+                  $arrayElemAt: ["$$firstVariant.images", 0],
+                },
+              },
+            },
             price: "$product.price",
             totalSold: 1,
             totalRevenue: 1,

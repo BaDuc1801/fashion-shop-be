@@ -26,6 +26,8 @@ if (mongoose.connection.readyState !== 1) {
   await mongoose.connect(mongoUri);
 }
 
+import "./jobs/autoCancelOrder.js";
+
 const corsOptions = {
   origin: [
     "https://fashion-shop-tau-three.vercel.app",

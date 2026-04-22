@@ -1,6 +1,5 @@
 import mongoose from "mongoose";
-import { calcStock } from "../utils/product.util.js";
-import { SizeSchema } from "./schemas/product.schema.js";
+import { VariantSchema } from "./schemas/product.schema.js";
 
 const ProductSchema = new mongoose.Schema(
   {
@@ -10,12 +9,7 @@ const ProductSchema = new mongoose.Schema(
     description: { type: String, required: true },
     descriptionEn: { type: String, required: true },
 
-    sku: {
-      type: String,
-      required: true,
-      unique: true,
-      index: true,
-    },
+    sku: { type: String, required: true, unique: true, index: true },
 
     price: { type: Number, required: true },
 
@@ -27,34 +21,39 @@ const ProductSchema = new mongoose.Schema(
       default: "active",
     },
 
-    images: [{ type: String }],
-
-    sizeVariants: [SizeSchema],
+    variants: [VariantSchema],
 
     categoryId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "category",
       required: true,
-      index: true,
     },
   },
   { timestamps: true }
 );
 
+function calcStock(variants) {
+  return variants.reduce(
+    (total, v) => total + v.skus.reduce((sum, s) => sum + s.quantity, 0),
+    0
+  );
+}
+
 ProductSchema.pre("save", function () {
-  if (this.sizeVariants?.length) {
-    this.stock = calcStock(this.sizeVariants);
+  if (this.variants) {
+    this.stock = calcStock(this.variants);
   }
 });
 
 ProductSchema.pre("findOneAndUpdate", function () {
   const update = this.getUpdate();
 
-  if (update.sizeVariants) {
-    update.stock = calcStock(update.sizeVariants);
+  const variants = update.variants || update.$set?.variants;
+
+  if (variants) {
+    if (!update.$set) update.$set = {};
+    update.$set.stock = calcStock(variants);
   }
 });
 
-const productModel = mongoose.model("product", ProductSchema);
-
-export default productModel;
+export default mongoose.model("product", ProductSchema);
