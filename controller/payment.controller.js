@@ -31,6 +31,7 @@ const appendPurchaseHistoryAndSendMail = async (order) => {
           status: "paid",
           items: order.items.map((i) => ({
             productName: i.nameSnapshot,
+            productNameEn: i.nameEnSnapshot,
             quantity: i.quantity,
             size: i.size,
             color: i.color,
@@ -89,6 +90,15 @@ const processVNPayResult = async (params) => {
   }
 
   if (!order) return { ok: false, code: "01", message: "Order not found" };
+
+  if (order.paymentStatus === "paid") {
+    return {
+      ok: true,
+      code: "02",
+      message: "Already processed",
+      order,
+    };
+  }
 
   const payment = await paymentModel.findOne({
     orderId: order._id,
@@ -206,6 +216,10 @@ const verifyMoMoSignature = (data = {}) => {
 const processMoMoResult = async (data) => {
   const order = await orderModel.findOne({ orderCode: data.orderId });
   if (!order) return { ok: false, code: "01", message: "Order not found" };
+
+  if (order.paymentStatus === "paid") {
+    return { ok: true, code: "02", message: "Already processed", order };
+  }
 
   const payment = await paymentModel.findOne({
     orderId: order._id,
@@ -498,6 +512,10 @@ export const sepayWebhook = async (req, res) => {
 
     if (!order) {
       return res.status(404).json({ message: "Order not found" });
+    }
+
+    if (order.paymentStatus === "paid") {
+      return res.json({ message: "Already processed" });
     }
 
     const payment = await paymentModel.findOne({

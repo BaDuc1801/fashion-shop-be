@@ -8,6 +8,7 @@ cron.schedule("* * * * *", async () => {
     const result = await orderModel.updateMany(
       {
         orderStatus: "pending",
+        paymentMethod: { $ne: "cod" },
         createdAt: { $lte: tenMinutesAgo },
       },
       {

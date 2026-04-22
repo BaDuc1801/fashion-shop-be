@@ -1,7 +1,8 @@
-export const calcStock = (sizeVariants = []) => {
-  return sizeVariants.reduce(
-    (sum, size) =>
-      sum + size.colors.reduce((acc, c) => acc + (c.quantity || 0), 0),
-    0
-  );
+export const calcStock = (variants = []) => {
+  return variants.reduce((total, variant) => {
+    return (
+      total +
+      (variant.skus?.reduce((sum, sku) => sum + (sku.quantity || 0), 0) || 0)
+    );
+  }, 0);
 };

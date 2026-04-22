@@ -2,8 +2,10 @@ import orderModel from "../model/order.model.js";
 import productModel from "../model/product.model.js";
 import voucherModel from "../model/voucher.model.js";
 import {
+  rollbackStock,
   reserveStock,
   releaseReservedStock,
+  moveReservedToSold,
 } from "../services/payment/stock.service.js";
 import { createVNPayUrl } from "../services/payment/vnpay.service.js";
 import paymentModel from "../model/payment.model.js";
@@ -34,9 +36,6 @@ const orderController = {
       let subtotal = 0;
       const orderItems = [];
 
-      // =====================
-      // 1. VALIDATE PRODUCTS
-      // =====================
       for (const item of items) {
         const product = await productModel.findById(item.productId);
 
@@ -46,15 +45,11 @@ const orderController = {
           });
         }
 
-        const sizeVariant = product.sizeVariants.find(
-          (s) => s.size === item.size
-        );
+        const variant = product.variants?.find((v) => v.color === item.color);
 
-        const colorVariant = sizeVariant?.colors?.find(
-          (c) => c.name === item.color
-        );
+        const sku = variant?.skus?.find((s) => s.size === item.size);
 
-        if (!colorVariant || colorVariant.quantity < item.quantity) {
+        if (!sku || sku.quantity < item.quantity) {
           return res.status(400).json({
             message: `Not enough stock for ${product.name} (${item.size}/${item.color})`,
           });
@@ -65,8 +60,9 @@ const orderController = {
         orderItems.push({
           productId: product._id,
           nameSnapshot: product.name,
+          nameEnSnapshot: product.nameEn,
           skuSnapshot: product.sku,
-          imageSnapshot: product.images?.[0] || "",
+          imageSnapshot: product.variants?.[0]?.images?.[0] || "",
           size: item.size,
           color: item.color,
           price: product.price,
@@ -74,9 +70,6 @@ const orderController = {
         });
       }
 
-      // =====================
-      // 2. VOUCHER
-      // =====================
       let discountAmount = 0;
       let voucher = null;
 
@@ -99,9 +92,6 @@ const orderController = {
       const shippingFee = 0;
       const total = (subtotal - discountAmount + shippingFee) * 26000;
 
-      // =====================
-      // 3. CREATE ORDER FIRST (DRAFT)
-      // =====================
       let order = await orderModel.create({
         userId,
         items: orderItems,
@@ -122,9 +112,6 @@ const orderController = {
         orderStatus: "pending",
       });
 
-      // =====================
-      // 4. RESERVE STOCK AFTER ORDER CREATED
-      // =====================
       try {
         await reserveStock(order.items);
       } catch (err) {
@@ -515,6 +502,8 @@ const orderController = {
         return res.status(404).json({ message: "Order not found" });
       }
 
+      const oldStatus = order.orderStatus;
+
       order.orderStatus = orderStatus;
       order.shippingAddress = {
         name: order.shippingAddress.name,
@@ -523,6 +512,18 @@ const orderController = {
         address: address,
       };
       await order.save();
+
+      if (
+        order.paymentMethod === "cod" &&
+        oldStatus === "pending" &&
+        (orderStatus === "completed" || orderStatus === "paid")
+      ) {
+        await moveReservedToSold(order.items);
+      }
+
+      if (orderStatus === "cancelled" && oldStatus !== "cancelled") {
+        await rollbackStock(order.items, oldStatus);
+      }
 
       const notification = await notificationModel.create({
         type: "order_status",

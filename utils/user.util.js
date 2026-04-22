@@ -94,7 +94,7 @@ export const sendOrderSuccessEmail = async ({ user, order }) => {
     .map(
       (i) => `
       <li>
-        ${i.nameSnapshot} - ${i.size || ""}/${i.color || ""}
+        ${i.nameEnSnapshot} - ${i.size || ""}/${i.color || ""}
         x${i.quantity} - ${i.price.toLocaleString()} VND
       </li>
     `

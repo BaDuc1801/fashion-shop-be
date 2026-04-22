@@ -131,6 +131,7 @@ const UserSchema = new mongoose.Schema(
         items: [
           {
             productName: String,
+            productNameEn: String,
             quantity: Number,
             unitPrice: Number,
             size: String,
