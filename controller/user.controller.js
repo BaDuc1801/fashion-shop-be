@@ -712,7 +712,6 @@ const userController = {
     try {
       const user = await userModel.findById(req.user.id).populate({
         path: "cart.product",
-        select: "name price images sku",
       });
 
       res.json(user.cart);
