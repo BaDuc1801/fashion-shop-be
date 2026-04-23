@@ -11,6 +11,7 @@
     "dayjs": "^1.11.20",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "geolib": "^3.3.14",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.4.1",
     "multer": "^2.1.1",
@@ -25,5 +26,8 @@
   },
   "scripts": {
     "dev": "node --watch index.js"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6"
   }
 }
