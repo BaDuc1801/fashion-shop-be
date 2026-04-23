@@ -14,6 +14,7 @@ import paymentRouter from "./routes/payment.route.js";
 import ratingRouter from "./routes/rating.route.js";
 import dashboardRouter from "./routes/dashboard.route.js";
 import notificationRouter from "./routes/notification.route.js";
+import aiRoute from "./routes/ai.route.js";
 import passport from "passport";
 import "./config/passport.js";
 import userController from "./controller/user.controller.js";
@@ -86,6 +87,7 @@ app.use("/api/payments", paymentRouter);
 app.use("/api/ratings", ratingRouter);
 app.use("/api/dashboard", dashboardRouter);
 app.use("/api/notifications", notificationRouter);
+app.use("/api/ai", aiRoute);
 
 if (!process.env.VERCEL) {
   app.listen(8080, () => {
