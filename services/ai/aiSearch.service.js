@@ -1,32 +1,34 @@
-import anthropic from "../../utils/anthropic.util.js";
+import { callAI } from "../../utils/gemini.util.js";
 import { getCache, setCache } from "../../utils/aiCache.util.js";
 
-/**
- * Gọi Claude phân tích câu mô tả thành keywords tìm kiếm.
- * Product không có field tags/color riêng nên dùng $regex trên name + description.
- */
+function fallbackKeywords(userQuery) {
+  return {
+    keywords: userQuery.split(/\s+/).filter((w) => w.length > 1),
+    priceMin: 0,
+    priceMax: -1,
+    sortBy: "newest",
+    explanation: `Kết quả tìm kiếm cho: "${userQuery}"`,
+    isFallback: true,
+  };
+}
+
 async function extractKeywordsFromQuery(userQuery) {
-  const cacheKey = `ai:search:${userQuery
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, "_")}`;
+  const cacheKey = `ai:search:${userQuery.toLowerCase().trim().replace(/\s+/g, "_")}`;
   const cached = getCache(cacheKey);
   if (cached) return { ...cached, fromCache: true };
 
-  const response = await anthropic.messages.create({
-    model: "claude-3-5-sonnet-20241022",
-    max_tokens: 300,
-    system: `Bạn là AI hỗ trợ tìm kiếm sản phẩm thời trang Việt Nam.
+  if (!process.env.GEMINI_API_KEY) return fallbackKeywords(userQuery);
+
+  try {
+    const text = await callAI(
+      `Bạn là AI hỗ trợ tìm kiếm sản phẩm thời trang Việt Nam.
 Nhiệm vụ: Phân tích mô tả của khách và trả về từ khóa tìm kiếm phù hợp.
-Chỉ trả JSON, không giải thích.`,
-    messages: [
-      {
-        role: "user",
-        content: `Khách mô tả: "${userQuery}"
+Chỉ trả JSON thuần, không markdown, không giải thích.`,
+      `Khách mô tả: "${userQuery}"
 
 Trả về JSON:
 {
-  "keywords": ["keyword1", "keyword2", ...],
+  "keywords": ["keyword1", "keyword2"],
   "priceMin": 0,
   "priceMax": -1,
   "sortBy": "newest",
@@ -34,55 +36,30 @@ Trả về JSON:
 }
 
 Lưu ý:
-- keywords: 3-6 từ khóa ngắn, tiếng Việt, liên quan tên/mô tả sản phẩm quần áo
+- keywords: 3-6 từ khóa ngắn tiếng Việt liên quan tên/mô tả sản phẩm quần áo
 - priceMax = -1 nghĩa là không giới hạn
 - sortBy: "newest" | "price_asc" | "price_desc"`,
-      },
-    ],
-  });
+      300
+    );
 
-  let result;
-  try {
-    const text = response.content[0].text.replace(/```json|```/gi, "").trim();
-    result = JSON.parse(text);
-  } catch {
-    // Fallback: tách từ query làm keyword
-    result = {
-      keywords: userQuery.split(/\s+/).filter((w) => w.length > 1),
-      priceMin: 0,
-      priceMax: -1,
-      sortBy: "newest",
-      explanation: "",
-    };
+    const clean = text.replace(/```json|```/gi, "").trim();
+    const result = JSON.parse(clean);
+    setCache(cacheKey, result, 3600);
+    return result;
+
+  } catch (err) {
+    console.warn("[AI Search] Gemini lỗi, dùng fallback:", err.message);
+    return fallbackKeywords(userQuery);
   }
-
-  setCache(cacheKey, result, 3600); // cache 1 giờ
-  return result;
 }
 
-/**
- * Tìm sản phẩm bằng AI.
- * Dùng $or + $regex trên name, nameEn, description, descriptionEn
- * vì Product model không có field tags/color riêng.
- *
- * @param {Model}  productModel  - import từ product.model.js
- * @param {string} userQuery     - chuỗi mô tả của người dùng
- * @param {number} page
- * @param {number} limit
- */
-export async function aiSearchProducts(
-  productModel,
-  userQuery,
-  page = 1,
-  limit = 20
-) {
+export async function aiSearchProducts(productModel, userQuery, page = 1, limit = 20) {
   const ai = await extractKeywordsFromQuery(userQuery);
 
-  // Mỗi keyword tạo ra 1 $or condition khớp với bất kỳ text field nào
   const keywordConditions = ai.keywords.flatMap((kw) => [
-    { name: { $regex: kw, $options: "i" } },
-    { nameEn: { $regex: kw, $options: "i" } },
-    { description: { $regex: kw, $options: "i" } },
+    { name:          { $regex: kw, $options: "i" } },
+    { nameEn:        { $regex: kw, $options: "i" } },
+    { description:   { $regex: kw, $options: "i" } },
     { descriptionEn: { $regex: kw, $options: "i" } },
   ]);
 
@@ -91,7 +68,6 @@ export async function aiSearchProducts(
     ...(keywordConditions.length > 0 && { $or: keywordConditions }),
   };
 
-  // Filter giá
   if (ai.priceMin > 0 || ai.priceMax > 0) {
     matchQuery.price = {};
     if (ai.priceMin > 0) matchQuery.price.$gte = ai.priceMin;
@@ -99,8 +75,8 @@ export async function aiSearchProducts(
   }
 
   const sortMap = {
-    newest: { createdAt: -1 },
-    price_asc: { price: 1 },
+    newest:     { createdAt: -1 },
+    price_asc:  { price: 1 },
     price_desc: { price: -1 },
   };
 
@@ -119,8 +95,9 @@ export async function aiSearchProducts(
     products,
     total,
     page,
-    totalPages: Math.ceil(total / limit),
+    totalPages:    Math.ceil(total / limit),
     aiExplanation: ai.explanation,
-    fromCache: ai.fromCache || false,
+    fromCache:     ai.fromCache  || false,
+    isFallback:    ai.isFallback || false,
   };
 }

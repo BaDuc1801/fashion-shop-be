@@ -1,15 +1,14 @@
-import productModel     from "../model/product.model.js";
-import reviewModel      from "../model/review.model.js";
+import productModel      from "../model/product.model.js";
+import ratingModel       from "../model/rating.model.js";       
 import userBehaviorModel from "../model/userBehavior.model.js";
 
-import { aiSearchProducts }        from "../services/ai/aiSearch.service.js";
-import { getPersonalizedProducts, trackUserEvent } from "../services/ai/aiPersonalization.service.js";
-import { moderateReview, moderateBatch }           from "../services/ai/aiModeration.service.js";
+import { aiSearchProducts }                          from "../services/ai/aiSearch.service.js";
+import { getPersonalizedProducts, trackUserEvent }   from "../services/ai/aiPersonalization.service.js";
+import { moderateReview, moderateBatch }             from "../services/ai/aiModeration.service.js";
 
 const aiController = {
 
   // POST /api/ai/search
-  // Body: { query: "đồ đi làm thanh lịch", page: 1, limit: 20 }
   search: async (req, res) => {
     try {
       const { query, page = 1, limit = 20 } = req.body;
@@ -25,8 +24,7 @@ const aiController = {
         Number(limit)
       );
 
-      // Ghi nhận hành vi tìm kiếm nếu đã đăng nhập (không chặn response)
-      const userId = req.user?._id || req.user?.id;
+      const userId = req.user?.id;
       if (userId) {
         trackUserEvent(userBehaviorModel, userId, {
           type: "search",
@@ -41,11 +39,10 @@ const aiController = {
     }
   },
 
-  // GET /api/ai/recommendations?limit=10
-  // Yêu cầu đăng nhập (dùng verifyToken middleware)
+  // GET /api/ai/recommendations
   getRecommendations: async (req, res) => {
     try {
-      const userId = req.user?._id || req.user?.id;
+      const userId = req.user?.id;
       const limit  = Math.min(Number(req.query.limit) || 10, 30);
 
       const result = await getPersonalizedProducts(
@@ -63,11 +60,9 @@ const aiController = {
   },
 
   // POST /api/ai/track
-  // Body: { type, productId, productName, categoryId, categoryName, price, searchQuery }
-  // FE gọi silent — không hiển thị kết quả cho người dùng
   track: async (req, res) => {
     try {
-      const userId = req.user?._id || req.user?.id;
+      const userId = req.user?.id;
       if (!userId) return res.sendStatus(204);
 
       const { type, productId, productName, categoryId, categoryName, price, searchQuery } = req.body;
@@ -85,15 +80,13 @@ const aiController = {
     }
   },
 
-  // POST /api/ai/reviews
-  // Body: { productId, rating, comment }
-  // Yêu cầu đăng nhập
-  submitReview: async (req, res) => {
+  // POST /api/ai/ratings
+  submitRating: async (req, res) => {
     try {
-      const { productId, rating, comment } = req.body;
-      const userId = req.user?._id || req.user?.id;
+      const { productId, orderId, rating, comment, images } = req.body;
+      const userId = req.user?.id;
 
-      if (!productId || !rating || !comment) {
+      if (!productId || !orderId || !rating) {
         return res.status(400).json({ message: "Thiếu thông tin đánh giá" });
       }
       if (rating < 1 || rating > 5) {
@@ -106,27 +99,33 @@ const aiController = {
         return res.status(404).json({ message: "Sản phẩm không tồn tại" });
       }
 
-      // AI kiểm duyệt
-      const modResult = await moderateReview(comment, rating);
+      // Kiểm tra đã rating đơn hàng này chưa
+      const existed = await ratingModel.findOne({ userId, orderId, productId });
+      if (existed) {
+        return res.status(400).json({ message: "Bạn đã đánh giá sản phẩm này rồi" });
+      }
 
-      // Lưu review
-      const review = await reviewModel.create({
+      // AI kiểm duyệt comment (chỉ kiểm duyệt nếu có comment)
+      let modResult = { status: "approved", reason: "", score: 1 };
+      if (comment?.trim()) {
+        modResult = await moderateReview(comment, rating);
+      }
+
+      // Lưu rating — dùng isPublic thay isVisible
+      const newRating = await ratingModel.create({
         productId,
+        orderId,
         userId,
         rating,
-        comment: comment.trim(),
+        comment: comment?.trim() || "",
+        images:  images || [],
+        isPublic: modResult.status === "approved",
         moderation: {
           status: modResult.status,
           reason: modResult.reason || "",
           score:  modResult.score  || 0,
         },
-        isVisible: modResult.status === "approved",
       });
-
-      // Cập nhật rating trung bình sản phẩm nếu được duyệt
-      if (modResult.status === "approved") {
-        updateProductRating(productId).catch(() => {});
-      }
 
       const messages = {
         approved:    "Cảm ơn bạn! Đánh giá đã được đăng.",
@@ -139,75 +138,67 @@ const aiController = {
         .json({
           success:  modResult.status !== "rejected",
           message:  messages[modResult.status],
-          reviewId: review._id,
+          ratingId: newRating._id,
         });
     } catch (error) {
-      console.error("[ai.submitReview]", error.message);
+      console.error("[ai.submitRating]", error.message);
       return res.status(500).json({ message: "Lỗi hệ thống" });
     }
   },
 
-  // GET /api/ai/reviews/:productId?page=1&limit=10
-  // Public
-  getReviews: async (req, res) => {
+  // GET /api/ai/ratings/:productId
+  getRatings: async (req, res) => {
     try {
       const { productId } = req.params;
       const page  = Number(req.query.page)  || 1;
       const limit = Number(req.query.limit) || 10;
 
-      const [reviews, total] = await Promise.all([
-        reviewModel
-          .find({ productId, isVisible: true })
+      const [ratings, total, stats] = await Promise.all([
+        ratingModel
+          .find({ productId, isPublic: true })
           .populate("userId", "name avatar")
           .sort({ createdAt: -1 })
           .skip((page - 1) * limit)
           .limit(limit)
           .lean(),
-        reviewModel.countDocuments({ productId, isVisible: true }),
-      ]);
-
-      // Tính rating trung bình
-      const ratingStats = await reviewModel.aggregate([
-        { $match: { productId: new (await import("mongoose")).default.Types.ObjectId(productId), isVisible: true } },
-        { $group: { _id: null, avg: { $avg: "$rating" }, total: { $sum: 1 } } },
+        ratingModel.countDocuments({ productId, isPublic: true }),
+        ratingModel.calcAverageRating(productId), // dùng static method có sẵn
       ]);
 
       return res.status(200).json({
         success: true,
         data: {
-          reviews,
+          ratings,
           total,
           page,
           totalPages: Math.ceil(total / limit),
-          avgRating: ratingStats[0]?.avg
-            ? Math.round(ratingStats[0].avg * 10) / 10
-            : 0,
+          avgRating:   stats.avgRating,
+          totalRatings: stats.totalRatings,
         },
       });
     } catch (error) {
-      console.error("[ai.getReviews]", error.message);
+      console.error("[ai.getRatings]", error.message);
       return res.status(500).json({ message: "Lỗi hệ thống" });
     }
   },
 
-  // POST /api/ai/reviews/batch-moderate
+  // POST /api/ai/ratings/batch-moderate — Admin duyệt hàng loạt
   batchModerate: async (req, res) => {
     try {
-      const pendingReviews = await reviewModel
+      const pending = await ratingModel
         .find({ "moderation.status": { $in: ["pending", "need_review"] } })
         .limit(50)
         .lean();
 
-      if (!pendingReviews.length) {
-        return res.status(200).json({ message: "Không có review nào cần kiểm duyệt", total: 0 });
+      if (!pending.length) {
+        return res.status(200).json({ message: "Không có đánh giá nào cần kiểm duyệt", total: 0 });
       }
 
       const results = await moderateBatch(
-        pendingReviews.map((r) => ({ id: r._id, comment: r.comment, rating: r.rating }))
+        pending.map((r) => ({ id: r._id, comment: r.comment, rating: r.rating }))
       );
 
-      // Cập nhật hàng loạt vào DB
-      await reviewModel.bulkWrite(
+      await ratingModel.bulkWrite(
         results.map(({ id, moderation }) => ({
           updateOne: {
             filter: { _id: id },
@@ -216,20 +207,12 @@ const aiController = {
                 "moderation.status": moderation.status,
                 "moderation.reason": moderation.reason || "",
                 "moderation.score":  moderation.score  || 0,
-                isVisible: moderation.status === "approved",
+                isPublic: moderation.status === "approved",
               },
             },
           },
         }))
       );
-
-      // Cập nhật rating cho các SP có review được duyệt
-      const approvedProductIds = results
-        .filter((r) => r.moderation.status === "approved")
-        .map((r) => pendingReviews.find((p) => String(p._id) === String(r.id))?.productId)
-        .filter(Boolean);
-
-      await Promise.allSettled(approvedProductIds.map(updateProductRating));
 
       return res.status(200).json({
         success:    true,
@@ -244,19 +227,5 @@ const aiController = {
     }
   },
 };
-
-// ─── Helper ───────────────────────────────────────────────────────────────────
-async function updateProductRating(productId) {
-  const mongoose = (await import("mongoose")).default;
-  const stats = await reviewModel.aggregate([
-    {
-      $match: {
-        productId: new mongoose.Types.ObjectId(String(productId)),
-        isVisible: true,
-      },
-    },
-    { $group: { _id: null, avg: { $avg: "$rating" }, count: { $sum: 1 } } },
-  ]);
-}
 
 export default aiController;

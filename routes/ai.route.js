@@ -10,27 +10,20 @@ const searchLimit = rateLimit({
   message: { message: "Tìm kiếm quá nhanh, vui lòng thử lại sau." },
   standardHeaders: true, legacyHeaders: false,
 });
-const reviewLimit = rateLimit({
-  windowMs: 3_600_000, max: 5,
-  message: { message: "Chỉ được gửi 5 đánh giá mỗi giờ." },
+const ratingLimit = rateLimit({
+  windowMs: 3_600_000, max: 10,
+  message: { message: "Chỉ được gửi 10 đánh giá mỗi giờ." },
   standardHeaders: true, legacyHeaders: false,
 });
 
-// ─── Search ───────────────────────────────────────────────────────────────────
-// Khách và user đều dùng được; đăng nhập thì lưu thêm lịch sử tìm kiếm
-router.post("/search", searchLimit, userMiddleware.optionalAuth, aiController.search);
+// Search & Recommend
+router.post("/search",          searchLimit, userMiddleware.optionalAuth, aiController.search);
+router.get("/recommendations",  userMiddleware.verifyToken,               aiController.getRecommendations);
+router.post("/track",           userMiddleware.optionalAuth,              aiController.track);
 
-// ─── Gợi ý cá nhân hóa ───────────────────────────────────────────────────────
-router.get("/recommendations", userMiddleware.verifyToken, aiController.getRecommendations);
-
-// ─── Track hành vi ───────────────────────────────────────────
-router.post("/track", userMiddleware.optionalAuth, aiController.track);
-
-// ─── Review ───────────────────────────────────────────────────────────────────
-router.get("/reviews/:productId", aiController.getReviews);
-router.post("/reviews", reviewLimit, userMiddleware.verifyToken, aiController.submitReview);
-
-// ─── Admin: duyệt hàng loạt ──────────────────────────────────────────────────
-router.post("/reviews/batch-moderate", userMiddleware.verifyToken, aiController.batchModerate);
+// Ratings
+router.get("/ratings/:productId",          aiController.getRatings);
+router.post("/ratings",         ratingLimit, userMiddleware.verifyToken,  aiController.submitRating);
+router.post("/ratings/batch-moderate",     userMiddleware.verifyToken,    aiController.batchModerate);
 
 export default router;

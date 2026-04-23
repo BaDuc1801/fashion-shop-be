@@ -10,10 +10,10 @@ const ratingSchema = new mongoose.Schema(
     },
 
     orderId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "order",
-        required: true,
-        index: true,
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "order",
+      required: true,
+      index: true,
     },
 
     productId: {
@@ -36,24 +36,30 @@ const ratingSchema = new mongoose.Schema(
       maxlength: 1000,
     },
 
-    images: [
-      {
-        type: String,
-      },
-    ],
+    images: [{ type: String }],
 
+    // isPublic = true khi AI duyệt qua (thay cho isVisible trong review cũ)
     isPublic: {
-        type: Boolean,
-        default: true,
-        index: true,
+      type: Boolean,
+      default: false, 
+      index: true,
+    },
+
+    moderation: {
+      status: {
+        type: String,
+        enum: ["pending", "approved", "rejected", "need_review"],
+        default: "pending",
       },
+      reason: { type: String, default: "" }, 
+      score:  { type: Number, default: 0 },   // 0.0 → 1.0
+    },
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
 
 ratingSchema.index({ productId: 1, createdAt: -1 });
+ratingSchema.index({ productId: 1, isPublic: 1 });
 
 ratingSchema.statics.calcAverageRating = async function (productId) {
   const result = await this.aggregate([
