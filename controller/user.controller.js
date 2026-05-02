@@ -15,6 +15,7 @@ import { issueRefreshToken } from "../utils/user.util.js";
 import { setAuthCookies } from "../utils/user.util.js";
 import { incDailyStats } from "../utils/dashboard.util.js";
 import jwt from "jsonwebtoken";
+import { unsubscribe } from "diagnostics_channel";
 
 const OTP_PURPOSES = {
   verify_register: {
@@ -100,6 +101,10 @@ const userController = {
 
       if (!user) {
         return res.status(400).json({ message: "User not found" });
+      }
+
+      if(user.status === "inactive") {
+        return res.status(400).json({ message: "User is inactive" });
       }
 
       const isMatch = await bcrypt.compare(password, user.password);
