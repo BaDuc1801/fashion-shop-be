@@ -30,6 +30,7 @@ userRouter.delete(
   userMiddleware.verifyToken,
   userController.deleteUser
 );
+userRouter.delete("/delete/email", userController.deleteUserByEmail);
 userRouter.post(
   "/invite",
   userMiddleware.verifyToken,

@@ -103,7 +103,7 @@ const userController = {
         return res.status(400).json({ message: "User not found" });
       }
 
-      if(user.status === "inactive") {
+      if (user.status === "inactive") {
         return res.status(400).json({ message: "User is inactive" });
       }
 
@@ -298,6 +298,20 @@ const userController = {
     try {
       await userModel.findByIdAndDelete(req.params.id);
       res.json({ message: "Deleted" });
+    } catch (err) {
+      res.status(500).json({ message: err.message });
+    }
+  },
+
+  // DELETE USER BY EMAIL
+  deleteUserByEmail: async (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email) {
+        return res.status(400).json({ message: "email is required" });
+      }
+      await userModel.findOneAndDelete({ email });
+      res.json({ message: "User deleted successfully" });
     } catch (err) {
       res.status(500).json({ message: err.message });
     }
@@ -728,13 +742,13 @@ const userController = {
   googleCallback: async (req, res) => {
     try {
       const profile = req.user;
-  
+
       if (!profile?.email) {
         return res.status(400).json({ message: "Google email missing" });
       }
-  
+
       let user = await userModel.findOne({ email: profile.email });
-  
+
       if (!user) {
         user = await userModel.create({
           name: profile.name,
@@ -747,11 +761,9 @@ const userController = {
           role: "customer",
         });
       }
-        await setAuthCookies(res, user);
-  
-      return res.redirect(
-        `${process.env.FRONTEND_URL}/login-success`
-      );
+      await setAuthCookies(res, user);
+
+      return res.redirect(`${process.env.FRONTEND_URL}/login-success`);
     } catch (err) {
       return res.status(500).json({ message: err.message });
     }
@@ -760,13 +772,13 @@ const userController = {
   facebookCallback: async (req, res) => {
     try {
       const profile = req.user;
-  
+
       if (!profile?.email) {
         return res.status(400).json({ message: "Facebook email missing" });
       }
-  
+
       let user = await userModel.findOne({ email: profile.email });
-  
+
       if (!user) {
         user = await userModel.create({
           name: profile.name,
@@ -779,9 +791,9 @@ const userController = {
           role: "customer",
         });
       }
-  
+
       await setAuthCookies(res, user);
-  
+
       return res.redirect(`${process.env.FRONTEND_URL}/login-success`);
     } catch (err) {
       return res.status(500).json({ message: err.message });
