@@ -10,10 +10,10 @@ const ratingSchema = new mongoose.Schema(
     },
 
     orderId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "order",
-        required: true,
-        index: true,
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "order",
+      required: true,
+      index: true,
     },
 
     productId: {
@@ -43,10 +43,36 @@ const ratingSchema = new mongoose.Schema(
     ],
 
     isPublic: {
-        type: Boolean,
-        default: true,
-        index: true,
-      },
+      type: Boolean,
+      default: true,
+      index: true,
+    },
+
+    isToxic: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+
+    toxicityReason: {
+      type: String,
+      default: "",
+    },
+
+    toxicityReasonEn: {
+      type: String,
+      default: "",
+    },
+
+    maskedComment: {
+      type: String,
+      default: "",
+    },
+
+    maskedRanges: {
+      type: [[Number, Number]],
+      default: [],
+    },
   },
   {
     timestamps: true,
@@ -57,7 +83,12 @@ ratingSchema.index({ productId: 1, createdAt: -1 });
 
 ratingSchema.statics.calcAverageRating = async function (productId) {
   const result = await this.aggregate([
-    { $match: { productId: new mongoose.Types.ObjectId(productId), isPublic: true } },
+    {
+      $match: {
+        productId: new mongoose.Types.ObjectId(productId),
+        isPublic: true,
+      },
+    },
     {
       $group: {
         _id: "$productId",
