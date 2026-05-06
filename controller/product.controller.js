@@ -3,6 +3,7 @@ import orderModel from "../model/order.model.js";
 import productModel from "../model/product.model.js";
 import ratingModel from "../model/rating.model.js";
 import userModel from "../model/user.model.js";
+import { recommendProducts } from "../services/product.service.js";
 
 const productController = {
   // CREATE
@@ -355,6 +356,36 @@ const productController = {
         total,
         totalPages,
         data,
+      });
+    } catch (err) {
+      res.status(500).json({ message: err.message });
+    }
+  },
+
+  recommendByAI: async (req, res) => {
+    try {
+      const { prompt } = req.body;
+
+      if (!prompt) {
+        return res.status(400).json({ message: "Prompt is required" });
+      }
+
+      const { productIds } = await recommendProducts(prompt);
+
+      if (!productIds || productIds.length === 0) {
+        return res.json({ data: [] });
+      }
+
+      const products = await productModel
+        .find({ _id: { $in: productIds } })
+        .populate("categoryId");
+
+      const sorted = productIds
+        .map((id) => products.find((p) => p._id.toString() === id))
+        .filter(Boolean);
+
+      res.json({
+        data: sorted,
       });
     } catch (err) {
       res.status(500).json({ message: err.message });
