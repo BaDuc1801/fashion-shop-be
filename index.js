@@ -18,6 +18,7 @@ import passport from "passport";
 import "./config/passport.js";
 import userController from "./controller/user.controller.js";
 import shippingRouter from "./routes/shipping.route.js";
+import virtualRouter from "./routes/virtual.route.js";
 
 const mongoUri = process.env.MONGOCONNECT;
 if (!mongoUri) {
@@ -77,6 +78,8 @@ app.get(
 app.get("/", (req, res) => {
   res.status(200).json({ message: "hello!" });
 });
+
+app.use("/outputs", express.static("outputs"));
 app.use("/api/upload", uploadRouter);
 app.use("/api/products", productRouter);
 app.use("/api/users", userRouter);
@@ -88,6 +91,7 @@ app.use("/api/ratings", ratingRouter);
 app.use("/api/dashboard", dashboardRouter);
 app.use("/api/notifications", notificationRouter);
 app.use("/api/shipping", shippingRouter);
+app.use("/api/virtual", virtualRouter);
 
 if (!process.env.VERCEL) {
   app.listen(8080, () => {
