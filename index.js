@@ -91,7 +91,7 @@ app.use("/api/ratings", ratingRouter);
 app.use("/api/dashboard", dashboardRouter);
 app.use("/api/notifications", notificationRouter);
 app.use("/api/shipping", shippingRouter);
-app.use("/api/virtual", virtualRouter);
+// app.use("/api/virtual", virtualRouter);
 
 if (!process.env.VERCEL) {
   app.listen(8080, () => {
