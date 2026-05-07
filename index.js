@@ -47,6 +47,7 @@ app.use(passport.initialize());
 app.use(express.json());
 app.use(cors(corsOptions));
 app.use(cookieParser());
+app.options("*", cors(corsOptions));
 
 app.get(
   "/auth/google",
@@ -91,7 +92,7 @@ app.use("/api/ratings", ratingRouter);
 app.use("/api/dashboard", dashboardRouter);
 app.use("/api/notifications", notificationRouter);
 app.use("/api/shipping", shippingRouter);
-// app.use("/api/virtual", virtualRouter);
+app.use("/api/virtual", virtualRouter);
 
 if (!process.env.VERCEL) {
   app.listen(8080, () => {
