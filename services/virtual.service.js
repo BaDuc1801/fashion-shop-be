@@ -64,22 +64,21 @@ export const generateVirtualTryOn = async ({ personFile, clothesUrl }) => {
     ],
 
     prompt: `
-      Create an ultra realistic virtual fashion try-on image.
-
-      STRICT REQUIREMENTS:
-      - First image is the REAL USER
-      - Preserve EXACT SAME face identity
-      - Do NOT change face
-      - Keep original hairstyle and skin tone
-      - Second image is the clothing item
-      - User must naturally wear the clothing
-      - Preserve realistic body proportions
-      - Realistic shadows and folds
-      - Ecommerce fashion photography
-      - Output must look like a real photo
+    Fashion outfit replacement.
+    
+    Use the first image as the base photo.
+    Keep the person's face, hairstyle, pose, background, and image framing unchanged.
+    DO NOT crop or zoom.
+    Keep full body inside frame.
+    Preserve face/body exactly.
+    The person must be fully visible from head to toe.
+    No cropping of head, feet, or hands.
+    
+    Replace the outfit using the clothing from the second image.
+    
+    The final result should look like a realistic fashion catalog photo with natural lighting and realistic fabric details.
     `,
-
-    size: "1024x1024",
+    size: "auto",
   });
 
   const base64 = result.data?.[0]?.b64_json;
