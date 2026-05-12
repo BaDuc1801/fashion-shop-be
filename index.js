@@ -19,6 +19,8 @@ import "./config/passport.js";
 import userController from "./controller/user.controller.js";
 import shippingRouter from "./routes/shipping.route.js";
 import virtualRouter from "./routes/virtual.route.js";
+import interactionRoutes from "./routes/interaction.routes.js";
+import recommendationRoutes from "./routes/recommendation.route.js";
 
 const mongoUri = process.env.MONGOCONNECT;
 if (!mongoUri) {
@@ -93,6 +95,8 @@ app.use("/api/dashboard", dashboardRouter);
 app.use("/api/notifications", notificationRouter);
 app.use("/api/shipping", shippingRouter);
 app.use("/api/virtual", virtualRouter);
+app.use("/api/interactions", interactionRoutes);
+app.use("/api/recommendations", recommendationRoutes);
 
 if (!process.env.VERCEL) {
   app.listen(8080, () => {

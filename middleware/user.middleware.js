@@ -13,26 +13,30 @@ const userMiddleware = {
   },
   verifyToken: async (req, res, next) => {
     try {
-      const token = req.cookies.access_token;
-      if (token) {
-        jwt.verify(token, process.env.SECRET_KEY, (err, decoded) => {
-          if (err) {
-            return res.status(401).json({ message: "Access token is invalid" });
-          } else {
-            req.user = decoded;
-            next();
-          }
-        });
-      } else {
-        res.status(401).json({ message: "Access token is missing" });
+      const token = req.cookies.access_token ||
+        req.headers.authorization?.split(" ")[1] ||
+        req.headers["x-access-token"];
+
+
+      if (!token) {
+        return res.status(401).json({ message: "Access token is missing" });
       }
+      jwt.verify(token, process.env.SECRET_KEY, (err, decoded) => {
+        if (err) {
+          return res.status(401).json({ message: "Access token is invalid" });
+        }
+        req.user = decoded;
+        next();
+      });
     } catch (error) {
-      res.status(401).json({ message: "Access token is missing" });
+      res.status(401).json({ message: "Access token is invalid" });
     }
   },
   optionalAuth: (req, res, next) => {
     try {
-      const token = req.cookies.access_token;
+      const token = req.cookies.access_token ||
+        req.headers.authorization?.split(" ")[1] ||
+        req.headers["x-access-token"];
 
       if (token) {
         const decoded = jwt.verify(token, process.env.SECRET_KEY);

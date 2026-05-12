@@ -21,6 +21,15 @@ const ProductSchema = new mongoose.Schema(
       default: "active",
     },
 
+    stats: {
+      view_count:        { type: Number, default: 0 },
+      click_count:       { type: Number, default: 0 },
+      add_to_cart_count: { type: Number, default: 0 },
+      purchase_count:    { type: Number, default: 0 },
+    },
+    ml_product_id: { type: Number, default: null, index: true },
+    hm_article_id: { type: String, default: null },
+
     variants: [VariantSchema],
 
     categoryId: {

@@ -98,6 +98,9 @@ const UserSchema = new mongoose.Schema(
       },
     ],
 
+    ml_user_id:     { type: Number, default: null, index: true },
+    has_ml_profile: { type: Boolean, default: false },
+
     purchaseHistory: [
       {
         orderId: {
