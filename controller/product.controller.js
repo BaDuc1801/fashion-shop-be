@@ -16,6 +16,15 @@ const productController = {
         return res.status(400).json({ message: "Category not found" });
       }
 
+      let ml_product_id = null;
+      const similarProduct = await productModel.findOne({
+        categoryId: body.categoryId,
+        ml_product_id: { $ne: null },
+      });
+      if (similarProduct) {
+        ml_product_id = similarProduct.ml_product_id;
+      }
+
       const product = await productModel.create({
         name: body.name,
         nameEn: body.nameEn,
@@ -26,6 +35,7 @@ const productController = {
         status: body.status || "active",
         variants: body.variants || [],
         categoryId: body.categoryId,
+        ml_product_id,
       });
 
       res.status(201).json(product);
