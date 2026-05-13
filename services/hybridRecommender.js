@@ -43,7 +43,7 @@ async function getALSProducts(mlUserId, limit) {
     ml_product_id: { $in: mlIds },
     status: "active",
     stock: { $gt: 0 },
-  }).select("name price variants categoryId ml_product_id stats").lean();
+  }).select("name nameEn sku price variants categoryId ml_product_id stats").lean();
  
   const map = new Map(products.map(p => [p.ml_product_id, p]));
   return mlIds
@@ -75,7 +75,7 @@ async function getFoldingInProducts(interactions, limit) {
     ml_product_id: { $in: mlIds },
     status: "active",
     stock: { $gt: 0 },
-  }).select("name price variants categoryId ml_product_id stats").lean();
+  }).select("name nameEn sku price variants categoryId ml_product_id stats").lean();
  
   return products
     .sort((a, b) => (scoreMap.get(b.ml_product_id) ?? 0) - (scoreMap.get(a.ml_product_id) ?? 0))
@@ -87,7 +87,7 @@ async function getTrending(limit) {
   return productModel.find({ status: "active", stock: { $gt: 0 } })
     .sort({ "stats.purchase_count": -1, "stats.view_count": -1 })
     .limit(limit)
-    .select("name price variants categoryId stats")
+    .select("name nameEn sku price variants categoryId stats")
     .lean()
     .then(products => products.map(p => ({
       ...p,

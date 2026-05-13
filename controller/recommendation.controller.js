@@ -10,33 +10,38 @@ export const getRecommendations = async (req, res) => {
 
     res.json({
       success: true,
-      type:       result.type,
+      type: result.type,
       cold_start: result.cold_start,
-      message:    result.message,
-      products:   result.products,
+      message: result.message,
+      products: result.products,
       meta: {
-        total:   result.products.length,
+        total: result.products.length,
         user_id: userId,
       },
     });
   } catch (err) {
     console.error("[getRecommendations]", err);
-    res.status(500).json({ success: false, message: err.message || "Lỗi server" });
+    res
+      .status(500)
+      .json({ success: false, message: err.message || "Lỗi server" });
   }
 };
 
 export const getTrending = async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit) || 10, 50);
-    const products = await productModel.find({ status: "active", stock: { $gt: 0 } })
+    const products = await productModel
+      .find({ status: "active", stock: { $gt: 0 } })
       .sort({ "stats.purchase_count": -1, "stats.view_count": -1 })
       .limit(limit)
-      .select("name price images category style color brand stats")
+      .select(
+        "name nameEn sku price images category style color brand stats variants"
+      )
       .lean();
 
     res.json({
-      success:  true,
-      type:     "trending",
+      success: true,
+      type: "trending",
       products: products.map((p) => ({
         ...p,
         explanation: { reason: "Sản phẩm được mua nhiều nhất tuần này" },
