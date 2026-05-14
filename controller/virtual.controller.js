@@ -25,9 +25,11 @@ const virtualController = {
     } catch (err) {
       console.error(err);
 
-      return res.status(500).json({
+      const status = err.statusCode && Number.isInteger(err.statusCode) ? err.statusCode : 500;
+
+      return res.status(status).json({
         success: false,
-        message: err.message,
+        message: err.message || "Something went wrong",
       });
     }
   },
