@@ -243,7 +243,7 @@ const userController = {
       res.json(user);
     } catch (err) {
       if (err.code === 11000) {
-        return res.status(400).json({ message: "Email already exists" });
+        return res.status(400).json({ message: "Phone number already exists" });
       }
 
       res.status(500).json({ message: err.message });
