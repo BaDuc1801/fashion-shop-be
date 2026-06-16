@@ -773,16 +773,23 @@ const userController = {
     try {
       const profile = req.user;
 
-      if (!profile?.email) {
-        return res.status(400).json({ message: "Facebook email missing" });
+      if (!profile?.id) {
+        return res.status(400).json({ message: "Facebook profile invalid" });
       }
 
-      let user = await userModel.findOne({ email: profile.email });
+      let user = await userModel.findOne({
+        provider: "facebook",
+        providerId: profile.id,
+      });
+
+      if (!user && profile.email) {
+        user = await userModel.findOne({ email: profile.email });
+      }
 
       if (!user) {
         user = await userModel.create({
-          name: profile.name,
-          email: profile.email,
+          name: profile.name || "Facebook User",
+          email: profile.email || `facebook.${profile.id}@oauth.local`,
           avatar: profile.avatar || "",
           provider: "facebook",
           providerId: profile.id,
@@ -790,6 +797,16 @@ const userController = {
           status: "active",
           role: "customer",
         });
+      } else if (
+        profile.email &&
+        user.email.endsWith("@oauth.local") &&
+        user.email !== profile.email
+      ) {
+        const emailTaken = await userModel.findOne({ email: profile.email });
+        if (!emailTaken) {
+          user.email = profile.email;
+          await user.save();
+        }
       }
 
       await setAuthCookies(res, user);
