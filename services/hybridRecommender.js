@@ -26,15 +26,73 @@ async function getAvailableMlIds() {
   return _availableIdsCache;
 }
  
-async function getRecentInteractions(userId) {
+async function getAllRecentInteractions(userId) {
   const rows = await Interaction.find({ userId })
     .sort({ createdAt: -1 })
     .limit(RECENT_LIMIT)
-    .populate({ path: "productId", select: "ml_product_id status" })
+    .populate({ path: "productId", select: "ml_product_id categoryId status _id" })
     .lean();
-  return rows.filter(r => r.productId?.ml_product_id != null);
+
+  return rows.filter((r) => r.productId?.status === "active");
 }
- 
+
+function getMlInteractions(interactions) {
+  return interactions.filter((r) => r.productId?.ml_product_id != null);
+}
+
+async function getContentBasedProducts(interactions, limit) {
+  if (!interactions.length) return [];
+
+  const categoryWeights = new Map();
+  const excludedProductIds = new Set();
+
+  for (const row of interactions) {
+    const productId = row.productId?._id;
+    const categoryId = row.productId?.categoryId;
+    if (!productId) continue;
+
+    excludedProductIds.add(String(productId));
+    if (!categoryId) continue;
+
+    const key = String(categoryId);
+    categoryWeights.set(key, (categoryWeights.get(key) || 0) + (row.score || 1));
+  }
+
+  if (!categoryWeights.size) return [];
+
+  const topCategories = [...categoryWeights.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([id]) => id);
+
+  const products = await productModel
+    .find({
+      status: "active",
+      stock: { $gt: 0 },
+      categoryId: { $in: topCategories },
+      _id: { $nin: [...excludedProductIds] },
+    })
+    .select("name nameEn sku price variants categoryId ml_product_id stats")
+    .lean();
+
+  return products
+    .map((p) => ({
+      product: p,
+      score:
+        (categoryWeights.get(String(p.categoryId)) || 0) +
+        (p.stats?.purchase_count || 0) * 0.1 +
+        (p.stats?.click_count || 0) * 0.05,
+    }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map(({ product }) => ({
+      ...product,
+      explanation: {
+        reason: "Dựa trên các sản phẩm mà bạn tìm kiếm và đã xem",
+      },
+    }));
+}
+
 async function getALSProducts(mlUserId, limit) {
   const mlIds = getRecommendedProductIds(mlUserId);
   if (!mlIds.length) return [];
@@ -109,48 +167,72 @@ function mergeAndDedupe(primary, secondary, limit) {
 export async function getHybridRecommendations(userId, limit = 10) {
   const user = await userModel.findById(userId).select("ml_user_id has_ml_profile name").lean();
   if (!user) throw new Error("Không tìm thấy user");
- 
-  const recentInteractions = await getRecentInteractions(userId);
-  const hasHistory   = recentInteractions.length > 0;
+
+  const allInteractions = await getAllRecentInteractions(userId);
+  const mlInteractions = getMlInteractions(allInteractions);
+  const hasHistory = allInteractions.length > 0;
+  const hasMlHistory = mlInteractions.length > 0;
   const hasMLProfile = user.has_ml_profile && user.ml_user_id != null;
- 
-  if (!hasMLProfile && !hasHistory) {
+
+  if (!hasHistory) {
     return { products: await getTrending(limit), type: "trending", cold_start: true };
   }
- 
-  if (!hasMLProfile && hasHistory) {
-    let products = await getFoldingInProducts(recentInteractions, limit);
+
+  if (!hasMLProfile) {
+    let products = [];
+
+    if (hasMlHistory) {
+      products = await getFoldingInProducts(mlInteractions, limit);
+    }
+
+    if (products.length < limit) {
+      const contentBased = await getContentBasedProducts(
+        allInteractions,
+        limit - products.length + 5
+      );
+      products = mergeAndDedupe(products, contentBased, limit);
+    }
+
     if (products.length < limit) {
       const extra = await getTrending(limit - products.length);
       products = mergeAndDedupe(products, extra, limit);
     }
+
     return {
       products,
-      type:       "folding_in",
-      cold_start: true,
-      message:    "Gợi ý dựa trên lịch sử xem của bạn",
+      type: hasMlHistory ? "folding_in" : "content_based",
+      cold_start: !hasMlHistory,
+      message: "Gợi ý dựa trên lịch sử xem của bạn",
     };
   }
- 
-  const alsLimit     = Math.ceil(limit * ALS_WEIGHT) + 5;
+
+  const alsLimit = Math.ceil(limit * ALS_WEIGHT) + 5;
   const foldingLimit = Math.ceil(limit * FOLDING_WEIGHT) + 5;
- 
-  const [alsProducts, foldingProducts] = await Promise.all([
+  const contentLimit = Math.ceil(limit * 0.2) + 3;
+
+  const [alsProducts, foldingProducts, contentProducts] = await Promise.all([
     getALSProducts(user.ml_user_id, alsLimit),
-    hasHistory ? getFoldingInProducts(recentInteractions, foldingLimit) : Promise.resolve([]),
+    hasMlHistory
+      ? getFoldingInProducts(mlInteractions, foldingLimit)
+      : Promise.resolve([]),
+    getContentBasedProducts(allInteractions, contentLimit),
   ]);
- 
+
   let products = mergeAndDedupe(alsProducts, foldingProducts, limit);
- 
+
+  if (products.length < limit) {
+    products = mergeAndDedupe(products, contentProducts, limit);
+  }
+
   if (products.length < limit) {
     const extra = await getTrending(limit - products.length);
     products = mergeAndDedupe(products, extra, limit);
   }
- 
+
   return {
     products,
-    type:       "hybrid",
+    type: "hybrid",
     cold_start: false,
-    message:    `Gợi ý cá nhân hóa cho ${user.name || "bạn"}`,
+    message: `Gợi ý cá nhân hóa cho ${user.name || "bạn"}`,
   };
 }
